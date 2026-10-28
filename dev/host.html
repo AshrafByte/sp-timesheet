@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Timesheet host harness</title>
+<style>
+  body { margin: 0; height: 100vh; display: grid; grid-template-columns: 220px 1fr; font: 13px system-ui; background: #0e0f12; color: #ddd; }
+  nav { padding: 12px; border-right: 1px solid #2a2c33; overflow: auto; }
+  nav button { display: block; width: 100%; margin-bottom: 8px; padding: 8px; }
+  #downloads { white-space: pre-wrap; color: #9a9ba3; }
+  main iframe { width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+<!--
+  Stands in for the Super Productivity window around the plugin: runs the
+  built plugin.js against a host-side PluginAPI, and opens the view in an
+  iframe tagged the way the app tags it. Used to check the CSV export bridge.
+-->
+<nav>
+  <div id="menu"></div>
+  <h4>Downloads</h4>
+  <div id="downloads"></div>
+</nav>
+<main id="view"></main>
+<script>
+  window.downloads = [];
+  window.PluginAPI = {
+    registerMenuEntry(cfg) {
+      const btn = document.createElement('button');
+      btn.textContent = cfg.label;
+      btn.addEventListener('click', cfg.onClick);
+      document.getElementById('menu').append(btn);
+    },
+    showIndexHtmlAsView() {
+      const frame = document.createElement('iframe');
+      frame.setAttribute('data-plugin-id', 'sp-timesheet');
+      frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
+      frame.src = '../dist/dev.html' + location.search;
+      document.getElementById('view').replaceChildren(frame);
+    },
+    async downloadFile(filename, data) {
+      window.downloads.push({ filename, data });
+      document.getElementById('downloads').textContent += `${filename}\n${data.length} chars\n\n`;
+    },
+    onUnload(fn) { window.unloadPlugin = fn; },
+  };
+</script>
+<script src="../dist/sp-timesheet/plugin.js"></script>
+<script>document.querySelector('#menu button').click();</script>
+</body>
+</html>

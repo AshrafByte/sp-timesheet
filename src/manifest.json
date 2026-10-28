@@ -1,0 +1,24 @@
+{
+  "id": "sp-timesheet",
+  "name": "Timesheet",
+  "version": "2.0.0",
+  "description": "A weekly timesheet of your tracked time: one card per day with progress toward a daily target, manual entries for work done outside the app, CSV export, and hours that stay on record after a task is deleted.",
+  "manifestVersion": 1,
+  "minSupVersion": "14.0.0",
+  "author": "AshrafByte",
+  "icon": "icon.svg",
+  "iFrame": true,
+  "sidePanel": false,
+  "hooks": ["action", "taskDelete", "finishDay", "persistedDataChanged"],
+  "permissions": [
+    "getTasks",
+    "getArchivedTasks",
+    "getAllProjects",
+    "getAllTags",
+    "persistDataSynced",
+    "loadSyncedData",
+    "listSyncedDataKeys",
+    "showSnack",
+    "downloadFile"
+  ]
+}

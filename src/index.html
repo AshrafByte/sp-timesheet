@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Timesheet</title>
+<!-- @inline styles.css -->
+</head>
+<body>
+<main class="ts-app">
+  <header class="ts-header">
+    <nav class="ts-nav" aria-label="Week">
+      <button type="button" class="ts-icon-btn" id="prevWeek" aria-label="Previous week">‹</button>
+      <h1 class="ts-range" id="rangeLabel" aria-live="polite">–</h1>
+      <button type="button" class="ts-icon-btn" id="nextWeek" aria-label="Next week">›</button>
+      <button type="button" class="ts-btn" id="todayBtn">Today</button>
+    </nav>
+    <div class="ts-actions">
+      <select class="ts-select" id="projectFilter" aria-label="Filter by project">
+        <option value="all">All projects</option>
+      </select>
+      <select class="ts-select" id="tagFilter" aria-label="Filter by tag">
+        <option value="all">All tags</option>
+      </select>
+      <button type="button" class="ts-btn" id="exportBtn">Export CSV</button>
+      <button type="button" class="ts-btn ts-btn-primary" id="addEntryBtn">+ Add entry</button>
+      <button type="button" class="ts-icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="ts-summary" id="weekSummary" aria-label="Week summary"></section>
+
+  <div class="ts-toolbar">
+    <span class="ts-muted" id="statusLine"></span>
+    <button type="button" class="ts-btn ts-btn-quiet" id="collapseAllBtn">Collapse all</button>
+  </div>
+
+  <div class="ts-days" id="daysContainer"></div>
+</main>
+
+<dialog class="ts-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+  <form method="dialog" id="settingsForm">
+    <h2 id="settingsTitle">Timesheet settings</h2>
+    <label class="ts-field">
+      <span class="ts-field-label">Week starts on</span>
+      <select id="weekStartSelect">
+        <option value="1">Monday</option>
+        <option value="0">Sunday</option>
+        <option value="6">Saturday</option>
+      </select>
+    </label>
+    <fieldset class="ts-field">
+      <legend class="ts-field-label">Target hours per day</legend>
+      <div class="ts-targets" id="targetsList"></div>
+    </fieldset>
+    <label class="ts-field">
+      <span class="ts-field-label">Show time as</span>
+      <select id="timeFormatSelect">
+        <option value="hm">Hours and minutes (3h 45m)</option>
+        <option value="decimal">Decimal hours (3.75h)</option>
+      </select>
+    </label>
+    <label class="ts-check">
+      <input type="checkbox" id="showSubtasksInput" />
+      <span>Show subtasks under their parent task</span>
+    </label>
+    <label class="ts-check">
+      <input type="checkbox" id="debugLoggingInput" />
+      <span>Debug logging in the developer console</span>
+    </label>
+    <div class="ts-dialog-actions">
+      <button type="button" class="ts-btn" data-close>Cancel</button>
+      <button type="submit" class="ts-btn ts-btn-primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="ts-dialog" id="entryDialog" aria-labelledby="entryTitleHeading">
+  <form method="dialog" id="entryForm">
+    <h2 id="entryTitleHeading">Add entry</h2>
+    <p class="ts-muted ts-dialog-sub" id="entrySub"></p>
+    <label class="ts-field">
+      <span class="ts-field-label">Title</span>
+      <input type="text" id="entryTitle" maxlength="200" placeholder="e.g. Client call" autocomplete="off" />
+    </label>
+    <label class="ts-field">
+      <span class="ts-field-label">Project</span>
+      <select id="entryProject"><option value="">No project</option></select>
+    </label>
+    <div class="ts-two-col">
+      <label class="ts-field">
+        <span class="ts-field-label">Date</span>
+        <input type="date" id="entryDate" required />
+      </label>
+      <label class="ts-field">
+        <span class="ts-field-label">Time</span>
+        <input type="text" id="entryDuration" placeholder="2h35m" autocomplete="off" required />
+      </label>
+    </div>
+    <p class="ts-hint">Time accepts 2h35m, 1h, 34m, 1:30 or 1.5.</p>
+    <p class="ts-error" id="entryError" role="alert" hidden></p>
+    <div class="ts-dialog-actions">
+      <button type="button" class="ts-btn ts-btn-danger" id="entryDeleteBtn" hidden>Delete</button>
+      <span class="ts-spacer"></span>
+      <button type="button" class="ts-btn" data-close>Cancel</button>
+      <button type="submit" class="ts-btn ts-btn-primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- @dev mock-api.js -->
+<!-- @inline core.js -->
+<!-- @inline app.js -->
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "sp-timesheet",
+  "private": true,
+  "description": "Weekly timesheet plugin for Super Productivity. The plugin version lives in src/manifest.json.",
+  "author": "AshrafByte",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AshrafByte/sp-timesheet"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "dev": "node scripts/build.mjs && node scripts/serve.mjs"
+  }
+}

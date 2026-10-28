@@ -1,0 +1,344 @@
+/*
+  Colors, fonts and the button/input reset come from Super Productivity, which
+  injects its theme variables and UI kit before this stylesheet. The fallbacks
+  only matter outside the app.
+*/
+:root {
+  --ts-bg: var(--bg, #16181d);
+  --ts-card: var(--card-bg, #1f2229);
+  --ts-text: var(--text-color, #e8e8ea);
+  --ts-muted: var(--text-color-muted, #9a9ba3);
+  --ts-divider: var(--divider-color, rgba(255, 255, 255, 0.1));
+  --ts-primary: var(--c-primary, #5b8def);
+  --ts-warn: var(--c-warn, #ff4d4f);
+  --ts-hover: var(--bg-darker, rgba(127, 127, 127, 0.08));
+  --ts-radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 28px 48px;
+  font-family: var(--font-primary-stack, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  color: var(--ts-text);
+  background: var(--ts-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+.ts-app { max-width: 1180px; margin: 0 auto; }
+.ts-muted { color: var(--ts-muted); }
+
+/* ---------- Buttons and inputs ---------- */
+
+.ts-btn,
+.ts-icon-btn,
+.ts-select {
+  height: 36px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 10px;
+  background: var(--ts-card);
+  color: var(--ts-text);
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease, filter 0.15s ease;
+}
+.ts-btn { padding: 0 14px; font-weight: 600; white-space: nowrap; }
+.ts-btn:hover, .ts-icon-btn:hover, .ts-select:hover { border-color: var(--ts-primary); }
+.ts-btn:focus-visible, .ts-icon-btn:focus-visible, .ts-select:focus-visible,
+.ts-day-toggle:focus-visible, .ts-row.is-editable:focus-visible {
+  outline: 2px solid var(--ts-primary);
+  outline-offset: 2px;
+}
+.ts-btn-primary { background: var(--ts-primary); border-color: var(--ts-primary); color: #fff; }
+.ts-btn-primary:hover { filter: brightness(1.1); }
+.ts-btn-quiet { background: transparent; }
+.ts-btn-danger { background: transparent; border-color: var(--ts-warn); color: var(--ts-warn); }
+
+.ts-icon-btn {
+  width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+}
+.ts-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: var(--ts-divider); }
+.ts-icon-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.ts-select {
+  max-width: 170px;
+  padding: 0 30px 0 12px;
+  text-overflow: ellipsis;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9ba3' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+}
+
+/* ---------- Header ---------- */
+
+.ts-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.ts-nav, .ts-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ts-range {
+  margin: 0 4px;
+  min-width: 170px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Summary ---------- */
+
+.ts-summary {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px;
+  margin-bottom: 12px;
+  background: var(--ts-card);
+  border: 1px solid var(--ts-divider);
+  border-radius: var(--ts-radius);
+}
+.ts-stats { display: flex; flex-wrap: wrap; gap: 36px; }
+.ts-stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ts-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.ts-stat-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ts-progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--ts-muted);
+  margin-bottom: 6px;
+}
+.ts-progress-label strong { color: var(--ts-text); }
+
+.ts-progress {
+  height: 6px;
+  background: var(--ts-divider);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ts-progress-lg { height: 8px; }
+.ts-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ts-primary);
+  transition: width 0.3s ease;
+}
+
+.ts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  min-height: 36px;
+  font-size: 0.8rem;
+}
+
+/* ---------- Day cards ---------- */
+
+.ts-days { display: grid; gap: 14px; }
+
+.ts-day {
+  background: var(--ts-card);
+  border: 1px solid var(--ts-divider);
+  border-radius: var(--ts-radius);
+  padding: 16px 22px;
+}
+.ts-day.is-today { border-color: var(--ts-primary); box-shadow: 0 0 0 1px var(--ts-primary); }
+
+.ts-day-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ts-day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 600;
+  font-size: 0.98rem;
+  text-align: left;
+}
+.ts-chevron { display: inline-block; color: var(--ts-muted); font-size: 11px; transition: transform 0.18s ease; }
+.ts-day.collapsed .ts-chevron { transform: rotate(-90deg); }
+.ts-day.collapsed .ts-table { display: none; }
+
+.ts-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ts-primary);
+  border: 1px solid var(--ts-primary);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.ts-day-right { display: flex; align-items: center; gap: 10px; }
+.ts-day-add {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px dashed var(--ts-divider);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ts-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.ts-day-add:hover { border-color: var(--ts-primary); color: var(--ts-primary); }
+.ts-day-hours { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ts-day-target { color: var(--ts-muted); font-weight: 400; }
+.ts-day .ts-progress { margin: 12px 0 4px; }
+
+/* ---------- Rows ---------- */
+
+.ts-table { margin-top: 12px; }
+.ts-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 2.4fr) minmax(120px, 1.2fr) minmax(140px, 1.4fr) 100px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 6px;
+  border-top: 1px solid var(--ts-divider);
+  font-size: 0.9rem;
+}
+.ts-row-head {
+  border-top: none;
+  padding-top: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ts-muted);
+}
+.ts-row.is-editable { cursor: pointer; }
+.ts-row.is-editable:hover { background: var(--ts-hover); border-radius: 8px; }
+.ts-row.is-child { border-top-style: dashed; font-size: 0.84rem; color: var(--ts-muted); }
+.ts-row.is-child .ts-task { padding-left: 18px; }
+.ts-row.is-child .ts-task::before { content: '↳'; margin-left: -16px; }
+
+.ts-task { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ts-task-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ts-muted);
+  border: 1px solid var(--ts-divider);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.ts-project { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.82rem; color: var(--ts-muted); }
+.ts-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--ts-primary); }
+
+.ts-tags { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.ts-tag {
+  font-size: 0.72rem;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--ts-hover);
+  color: var(--ts-muted);
+  white-space: nowrap;
+}
+
+.ts-time { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ts-empty { padding: 18px 4px; text-align: center; color: var(--ts-muted); font-size: 0.85rem; border-top: 1px solid var(--ts-divider); }
+
+/* ---------- Dialogs ---------- */
+
+.ts-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: 85vh;
+  padding: 24px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 16px;
+  background: var(--ts-card);
+  color: var(--ts-text);
+}
+.ts-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.ts-dialog h2 { margin: 0 0 16px; font-size: 1.05rem; }
+.ts-dialog-sub { margin: -8px 0 16px; font-size: 0.8rem; }
+
+.ts-field { display: block; margin: 0 0 16px; padding: 0; border: 0; min-width: 0; }
+.ts-field-label {
+  display: block;
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ts-muted);
+}
+.ts-field input,
+.ts-field select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 8px;
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-size: 0.9rem;
+}
+.ts-field input:disabled, .ts-field select:disabled { opacity: 0.6; }
+.ts-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ts-two-col .ts-field { margin-bottom: 6px; }
+
+.ts-targets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ts-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 8px;
+  background: var(--ts-bg);
+  font-size: 0.82rem;
+  color: var(--ts-muted);
+}
+.ts-target input {
+  width: 60px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ts-check { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 0.88rem; }
+.ts-hint { margin: 0 0 12px; font-size: 0.72rem; color: var(--ts-muted); }
+.ts-error { margin: 0 0 12px; font-size: 0.8rem; color: var(--ts-warn); }
+.ts-dialog-actions { display: flex; align-items: center; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+.ts-spacer { flex: 1; }
+
+@media (max-width: 640px) {
+  body { padding: 16px 16px 40px; }
+  .ts-day { padding: 14px 14px; }
+  .ts-row { grid-template-columns: minmax(120px, 1.6fr) minmax(90px, 1fr) 80px; }
+  .ts-row > .ts-tags { display: none; }
+  .ts-stats { gap: 20px; }
+}
