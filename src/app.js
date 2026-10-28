@@ -921,7 +921,9 @@
 
   const scrollToToday = () => {
     const card = document.querySelector('.ts-day.is-today');
-    if (card && state.settings.view === 'sheet') card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!card || state.settings.view !== 'sheet') return;
+    const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    card.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'start' });
   };
 
   const setWeek = (weekStart) => {

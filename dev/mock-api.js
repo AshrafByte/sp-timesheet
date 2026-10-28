@@ -8,6 +8,7 @@
  *   ?timer=0       no running timer
  *   ?firstDay=0..6 Super Productivity's first day of week (default: System default)
  *   ?dayStart=HH:MM when Super Productivity starts a new day (default 00:00)
+ *   ?demo=busy     the busy dataset from demo.js; ?shot=<state> sets up a screenshot
  * window.__mock exposes helpers for poking at it from the console.
  */
 (() => {
@@ -43,14 +44,14 @@
   };
   const days = (pairs) => Object.fromEntries(pairs.map(([offset, ms]) => [dayStr(offset), ms]));
 
-  const projects = [
+  let projects = [
     { id: 'p-client', title: 'Client Portal', theme: { primary: '#e91e63' } },
     { id: 'p-internal', title: 'Internal', theme: { primary: '#43a047' } },
     { id: 'p-learning', title: 'Learning', theme: { primary: '#fb8c00' } },
     { id: 'p-ops', title: 'Operations', theme: { primary: '#8e24aa' } },
     { id: 'p-design', title: 'Design System', theme: { primary: '#00897b' } },
   ];
-  const tags = [
+  let tags = [
     { id: 'TODAY', title: 'Today' },
     { id: 't-urgent', title: 'Urgent' },
     { id: 't-meeting', title: 'Meeting' },
@@ -104,6 +105,10 @@
     }
   }
 
+  // ?demo=busy: the realistic dataset from demo.js instead.
+  const demo = params.get('demo') === 'busy' && typeof TimesheetDemo !== 'undefined' ? TimesheetDemo.build({ dayStr }) : null;
+  if (demo) ({ projects, tags, active, archived } = demo);
+
   // ---------- Storage (persisted in localStorage so reloads keep it) ----------
   if (params.get('reset')) localStorage.removeItem(STORAGE_KEY);
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || { blob: null, keys: {} };
@@ -119,6 +124,18 @@
       },
       autoDeleteState: { lastRunDate: dayStr(-1) },
     });
+  }
+  if (demo && keyed && !Object.keys(saved.keys).length) {
+    // What Timesheet itself would have stored: manual entries and a deleted task.
+    for (const [id, entry] of Object.entries(demo.stored)) {
+      for (const [date, ms] of Object.entries(entry.byDate)) {
+        const key = `log-${date.slice(0, 7)}`;
+        const shard = saved.keys[key] ? JSON.parse(saved.keys[key]) : { v: 2, entries: {} };
+        shard.entries[id] = { ...entry, byDate: { ...(shard.entries[id] ? shard.entries[id].byDate : {}), [date]: ms } };
+        saved.keys[key] = JSON.stringify(shard);
+      }
+    }
+    saved.keys.settings = JSON.stringify({ v: 2, weekStartsOn: 'app' });
   }
   const persist = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   const stats = { writes: [], loads: 0, lists: 0, getTasks: 0, getArchivedTasks: 0 };
@@ -259,4 +276,9 @@
 
   // The real host can inject the API after the plugin's script starts.
   setTimeout(() => { window.PluginAPI = api; }, 150);
+
+  // ?shot=<state>: set the view up for a screenshot (see demo.js).
+  if (params.has('shot') && typeof TimesheetDemo !== 'undefined') {
+    TimesheetDemo.runShot(params.get('shot')).catch((err) => console.error(err));
+  }
 })();

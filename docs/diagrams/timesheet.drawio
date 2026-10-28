@@ -1,0 +1,161 @@
+<mxfile host="drawio" version="31.4.5">
+  <diagram id="components" name="Components">
+    <mxGraphModel adaptiveColors="auto" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1100" pageHeight="700" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <!-- Drawn first, so the container title bands sit on top of them. -->
+        <mxCell id="e-api-app" value="tasks · app settings · hooks" style="html=1;fontSize=12;strokeColor=#666666;exitX=0.5208;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="api" target="app">
+          <mxGeometry x="-0.4" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-core-api" value="read · merge · write" style="html=1;fontSize=12;strokeColor=#666666;startArrow=classic;exitX=0.5;exitY=0;entryX=0.8739;entryY=1;" edge="1" parent="1" source="core" target="api">
+          <mxGeometry x="0.4" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-bridge-api" value="downloadFile" style="html=1;fontSize=12;strokeColor=#666666;exitX=0.5;exitY=0;entryX=0.1162;entryY=1;" edge="1" parent="1" source="bridge" target="api">
+          <mxGeometry x="0.4" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sp" value="Super Productivity" style="swimlane;startSize=30;html=1;fontSize=14;fontStyle=1;fillColor=#f5f5f5;strokeColor=#9e9e9e;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="64" width="960" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="tasks" value="Tasks and archive&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;projects · tags · time per day&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="sp">
+          <mxGeometry x="24" y="50" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="config" value="App settings&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;first day of week · day start&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="sp">
+          <mxGeometry x="248" y="50" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="storage" value="Plugin storage, synced&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;settings · log-YYYY-MM&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="sp">
+          <mxGeometry x="512" y="44" width="200" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="download" value="Save to disk&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;CSV exports and backups&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="sp">
+          <mxGeometry x="736" y="50" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="api" value="Plugin API" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="sp">
+          <mxGeometry x="24" y="150" width="912" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="b-tasks" style="html=1;endArrow=none;strokeColor=#6c8ebf;exitX=0.5;exitY=1;entryX=0.1096;entryY=0;" edge="1" parent="sp" source="tasks" target="api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-config" style="html=1;endArrow=none;strokeColor=#6c8ebf;exitX=0.5;exitY=1;entryX=0.3553;entryY=0;" edge="1" parent="sp" source="config" target="api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-storage" style="html=1;endArrow=none;strokeColor=#6c8ebf;exitX=0.5;exitY=1;entryX=0.6447;entryY=0;" edge="1" parent="sp" source="storage" target="api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-download" style="html=1;endArrow=none;strokeColor=#6c8ebf;exitX=0.5;exitY=1;entryX=0.8904;entryY=0;" edge="1" parent="sp" source="download" target="api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="host" value="plugin.js · in the app window" style="swimlane;startSize=30;html=1;fontSize=14;fontStyle=1;fillColor=#fff2cc;strokeColor=#d6b656;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="260" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="bridge" value="File save bridge&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;checks the sender and the file name&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="host">
+          <mxGeometry x="24" y="56" width="212" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="menu" value="Sidebar entry&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;Timesheet in the main menu&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="host">
+          <mxGeometry x="24" y="160" width="212" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="view" value="Timesheet view · sandboxed iframe (index.html)" style="swimlane;startSize=30;html=1;fontSize=14;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="400" y="360" width="600" height="244" as="geometry" />
+        </mxCell>
+        <mxCell id="app" value="app.js&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;refresh · save · render · dialogs&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="view">
+          <mxGeometry x="24" y="56" width="230" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="core" value="core.js&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;time log · totals · CSV · storage&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="view">
+          <mxGeometry x="346" y="56" width="230" height="64" as="geometry" />
+        </mxCell>
+        <mxCell id="charts" value="charts.js&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;SVG column charts&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="view">
+          <mxGeometry x="24" y="160" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e-app-core" style="html=1;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="view" source="app" target="core">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-app-charts" style="html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="view" source="app" target="charts">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-app-bridge" value="file" style="html=1;fontSize=12;strokeColor=#666666;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="app" target="bridge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-menu-view" value="opens" style="html=1;fontSize=12;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.7787;" edge="1" parent="1" source="menu" target="view">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="saving" name="Saving">
+    <mxGraphModel adaptiveColors="auto" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="700" pageHeight="1000" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="start" value="Save&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;after an edit or new tracked time&lt;/font&gt;" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="loaded" value="Saved data loaded?" style="rhombus;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="170" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="retry" value="Write nothing&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;edits wait in memory&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="350" y="185" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="encode" value="Split the log by month&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;only changed keys are written&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="read" value="Read the key again&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;sync may have changed it&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="readable" value="Readable by this version?" style="rhombus;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="60" y="500" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="protect" value="Leave the key untouched&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;written by a newer version, or damaged; edits to it are refused&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="350" y="515" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="changed" value="Changed elsewhere?" style="rhombus;whiteSpace=wrap;html=1;fontSize=14;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="70" y="640" width="180" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="merge" value="Merge entry by entry&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;both sides' changes are kept&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="350" y="655" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="write" value="Write the key" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="770" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="done" value="Saved&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;reloads if anything was merged&lt;/font&gt;" style="rounded=1;arcSize=40;whiteSpace=wrap;html=1;fontSize=14;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="870" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" style="html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="start" target="loaded">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="Yes" style="html=1;fontSize=12;fontColor=#2D7600;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="loaded" target="encode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="No" style="html=1;fontSize=12;fontColor=#B20000;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="loaded" target="retry">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" style="html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="encode" target="read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" style="html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="read" target="readable">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s6" value="No" style="html=1;fontSize=12;fontColor=#B20000;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="readable" target="protect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s7" value="Yes" style="html=1;fontSize=12;fontColor=#2D7600;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="readable" target="changed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s8" value="Yes" style="html=1;fontSize=12;fontColor=#2D7600;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="changed" target="merge">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s9" value="No" style="html=1;fontSize=12;fontColor=#B20000;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="changed" target="write">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="merge" target="write">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s11" style="html=1;strokeColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="write" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
