@@ -263,6 +263,39 @@ button { cursor: pointer; }
 .ts-hero-row > div { flex: 1 1 240px; min-width: 0; }
 .ts-hero { font-size: 2.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 .ts-hero-sub { margin-top: 2px; font-size: 0.85rem; color: var(--ts-muted); }
+.ts-hero-sub:empty { display: none; }
+.ts-hero-of { font-size: 1rem; font-weight: 400; letter-spacing: 0; color: var(--ts-muted); }
+
+.ts-goal { margin-top: 14px; }
+.ts-goal-text {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  color: var(--ts-muted);
+}
+.ts-goal-track { position: relative; height: 8px; border-radius: 999px; background: var(--ts-divider); }
+.ts-goal-fill { height: 100%; border-radius: 999px; background: var(--ts-primary); transition: width 0.3s ease; }
+/* Pace: where the bar would reach if every day so far had met its target. */
+.ts-goal-pace {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ts-text);
+}
+.ts-goal-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px 20px;
+  margin: 18px 0 6px;
+}
+.ts-goal-stat-value { font-size: 1.15rem; font-weight: 700; }
+.ts-goal-stat-label { margin-top: 2px; font-size: 0.75rem; color: var(--ts-muted); }
 
 .ts-chart-wrap { position: relative; }
 .ts-chart { width: 100%; touch-action: pan-y; }
@@ -343,7 +376,7 @@ button { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .ts-grow { animation: none; }
-  .ts-col, .ts-col-band, .ts-bd-fill, .ts-progress-fill { transition: none; }
+  .ts-col, .ts-col-band, .ts-bd-fill, .ts-progress-fill, .ts-goal-fill { transition: none; }
 }
 
 /* ---------- Day cards ---------- */
@@ -504,21 +537,38 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 10px;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--ts-divider);
   border-radius: 8px;
   background: var(--ts-bg);
   font-size: 0.82rem;
   color: var(--ts-muted);
+  cursor: text;
+  transition: border-color 0.15s ease;
 }
+.ts-target:hover { border-color: var(--ts-muted); }
+/* The whole field shows focus, not the bare number inside it. */
+.ts-target:focus-within { border-color: var(--ts-primary); box-shadow: 0 0 0 1px var(--ts-primary); }
+.ts-target-value { display: inline-flex; align-items: baseline; gap: 2px; }
 .ts-target input {
-  width: 60px;
+  width: 3.5em;
   height: 28px;
+  padding: 0;
   border: 0;
+  outline: none;
   background: transparent;
+  color: var(--ts-text);
+  font-size: 0.95rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
+/* The browser's spinner arrows don't fit the field; arrow keys and typing still work. */
+.ts-target input::-webkit-outer-spin-button,
+.ts-target input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ts-target-unit { color: var(--ts-muted); }
 
 .ts-check { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 0.88rem; }
 .ts-hint { margin: 0 0 12px; font-size: 0.72rem; color: var(--ts-muted); }

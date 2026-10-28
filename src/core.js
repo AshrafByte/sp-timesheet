@@ -435,6 +435,33 @@ const TimesheetCore = (() => {
     return { current: total(weekStart), previous: total(addDays(weekStart, -7)), days };
   };
 
+  /**
+   * Progress toward the week's target. `pace` is the target of the days up to
+   * and including today: where you'd be if every day so far had met its
+   * target. For a week that's over, pace is the whole target. Days on target
+   * only count days so far that have a target, so a 0h weekend never counts
+   * against you. dailyTargetHours: index 0..6 = Sun..Sat.
+   */
+  const weekProgress = (log, weekStart, filter, dailyTargetHours, today = new Date()) => {
+    const todayStr = toDateStr(today);
+    const result = { total: 0, target: 0, pace: 0, activeDays: 0, average: 0, daysWithTarget: 0, daysOnTarget: 0 };
+    for (const date of weekDates(weekStart)) {
+      const ms = dayTotal(log, date, filter);
+      const dayTarget = (Number(dailyTargetHours[date.getDay()]) || 0) * HOUR_MS;
+      result.total += ms;
+      result.target += dayTarget;
+      if (ms > 0) result.activeDays++;
+      if (toDateStr(date) > todayStr) continue;
+      result.pace += dayTarget;
+      if (dayTarget > 0) {
+        result.daysWithTarget++;
+        if (ms >= dayTarget) result.daysOnTarget++;
+      }
+    }
+    result.average = result.activeDays ? result.total / result.activeDays : 0;
+    return result;
+  };
+
   // Where a row's counted time was tracked, with the tags that apply there:
   // subtask time carries the subtask's tags plus the parent's, and time on the
   // parent itself carries the parent's.
@@ -745,6 +772,7 @@ const TimesheetCore = (() => {
     weekChart,
     weekTotals,
     compareWithPreviousWeek,
+    weekProgress,
     breakdown,
     hourScale,
     buildCsv,

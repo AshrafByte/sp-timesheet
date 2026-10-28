@@ -531,6 +531,70 @@
 
   const focusedHit = (host) => [...host.querySelectorAll('.ts-hit')].indexOf(document.activeElement);
 
+  const MINUTE_MS = 60000;
+
+  // Top of the Insights card: the total, a bar toward the target (with a pace
+  // marker for a week in progress), and for the whole week the stats around it.
+  const renderHero = (day, dayTarget, todayStr) => {
+    const progress = C.weekProgress(state.log, state.weekStart, state.filter, state.settings.dailyTargetHours);
+    const value = day ? day.total : progress.total;
+    const target = day ? dayTarget : progress.target;
+    const lastDay = day ? day.dateStr : C.toDateStr(C.addDays(state.weekStart, 6));
+    const over = lastDay < todayStr; // the day or week is finished
+    const showPace = !day && progress.pace > 0 && progress.pace < progress.target;
+
+    $('heroLabel').textContent = day ? `${LONG_DAY_NAMES[day.date.getDay()]}, ${shortDate(day.date)}` : weekTitle();
+    $('showWeekBtn').hidden = !day;
+    $('heroValue').textContent = fmt(value);
+    $('heroOf').textContent = target ? `of ${fmt(target)} target` : '';
+    $('heroSub').textContent = day && !target ? `No target this day · Week ${fmt(progress.total)}` : '';
+
+    $('goal').hidden = !target;
+    if (target) {
+      const pct = (value / target) * 100;
+      let status;
+      if (value >= target) {
+        status = value - target >= MINUTE_MS ? `${fmt(value - target)} over target` : 'Target met';
+      } else if (showPace) {
+        const ahead = value - progress.pace;
+        status = Math.abs(ahead) < MINUTE_MS ? 'On pace' : `${fmt(Math.abs(ahead))} ${ahead < 0 ? 'behind' : 'ahead of'} pace`;
+      } else {
+        status = `${fmt(target - value)} ${over ? 'short' : 'to go'}`;
+      }
+      $('goalLeft').textContent = `${Math.round(pct)}% · ${status}`;
+      $('goalRight').textContent = showPace ? `Pace by today ${fmt(progress.pace)}`
+        : day && progress.target ? `Week ${fmt(progress.total)} of ${fmt(progress.target)}` : '';
+      $('goalFill').style.width = `${Math.min(100, pct)}%`;
+      $('goalPace').hidden = !showPace;
+      if (showPace) $('goalPace').style.left = `${(progress.pace / target) * 100}%`;
+      $('goalBar').setAttribute('aria-valuenow', String(Math.min(100, Math.round(pct))));
+      $('goalBar').setAttribute('aria-label', `${fmt(value)} of ${fmt(target)} target`);
+    }
+
+    const stats = [];
+    if (!day) {
+      stats.push([progress.activeDays ? fmt(progress.average) : '–', 'Avg per active day']);
+      if (progress.target) {
+        stats.push([progress.total >= progress.target ? 'Met' : fmt(progress.target - progress.total), 'Left to target']);
+        stats.push([progress.daysWithTarget ? `${progress.daysOnTarget} of ${progress.daysWithTarget}` : '–', 'Days on target']);
+      }
+      const cmp = C.compareWithPreviousWeek(state.log, state.weekStart, state.filter);
+      if (cmp) {
+        const period = cmp.days < 7 ? 'vs same days last week' : 'vs the week before';
+        if (cmp.previous > 0) {
+          const change = Math.round(((cmp.current - cmp.previous) / cmp.previous) * 100);
+          stats.push([change === 0 ? 'Same' : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%`, period]);
+        } else {
+          stats.push(['–', 'Nothing tracked the week before']);
+        }
+      }
+    }
+    $('goalStats').replaceChildren(...stats.map(([value, label]) => h('div', { class: 'ts-goal-stat' },
+      h('div', { class: 'ts-goal-stat-value', text: value }),
+      h('div', { class: 'ts-goal-stat-label', text: label }))));
+    $('goalStats').hidden = !stats.length;
+  };
+
   let insightsKey = '';
   let weekHover = -1;
   let trendHover = -1;
@@ -567,26 +631,8 @@
     insightsKey = key;
     if (animate) state.animateCharts = false;
 
-    // Hero
     const day = selected >= 0 ? week[selected] : null;
-    $('heroLabel').textContent = day ? `${LONG_DAY_NAMES[day.date.getDay()]}, ${shortDate(day.date)}` : weekTitle();
-    $('heroValue').textContent = fmt(day ? day.total : weekTotal);
-    $('showWeekBtn').hidden = !day;
-    if (day) {
-      const target = targets[selected];
-      $('heroSub').textContent = `${target ? `${Math.round((day.total / target) * 100)}% of ${fmt(target)} target` : 'No target this day'} · Week ${fmt(weekTotal)}`;
-    } else {
-      const parts = [activeDays ? `Daily average ${fmt(average)}` : 'Nothing tracked yet'];
-      const cmp = C.compareWithPreviousWeek(state.log, state.weekStart, state.filter);
-      if (cmp && cmp.previous > 0) {
-        const change = Math.round(((cmp.current - cmp.previous) / cmp.previous) * 100);
-        const period = cmp.days < 7 ? 'same days last week' : 'the week before';
-        parts.push(change === 0 ? `Same as ${period}` : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}% vs ${period}`);
-      } else if (cmp && cmp.current > 0) {
-        parts.push('Nothing tracked the week before');
-      }
-      $('heroSub').textContent = parts.join(' · ');
-    }
+    renderHero(day, day ? targets[selected] : 0, todayStr);
 
     // Week chart
     const weekHost = $('weekChart');
@@ -904,16 +950,19 @@
     $('debugLoggingInput').checked = s.debugLogging;
     const order = Array.from({ length: 7 }, (_, i) => (s.weekStartsOn + i) % 7);
     $('targetsList').replaceChildren(...order.map((day) => h('label', { class: 'ts-target' },
-      C.DAY_NAMES[day],
-      h('input', {
-        type: 'number',
-        min: '0',
-        max: '24',
-        step: '0.25',
-        inputmode: 'decimal',
-        value: String(s.dailyTargetHours[day]),
-        dataset: { day: String(day) },
-      }))));
+      h('span', { text: C.DAY_NAMES[day] }),
+      h('span', { class: 'ts-target-value' },
+        h('input', {
+          type: 'number',
+          min: '0',
+          max: '24',
+          step: '0.25',
+          inputmode: 'decimal',
+          value: String(s.dailyTargetHours[day]),
+          dataset: { day: String(day) },
+          'aria-label': `${LONG_DAY_NAMES[day]} target in hours`,
+        }),
+        h('span', { class: 'ts-target-unit', 'aria-hidden': 'true', text: 'h' })))));
     $('settingsDialog').showModal();
   };
 

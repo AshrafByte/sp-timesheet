@@ -16,7 +16,7 @@ Switch from **Timesheet** to **Insights** at the top for a picture of the week:
 
 - **The week as stacked columns**, one per day, colored by project, with a dashed daily-average line and a mark at each day's target. Hover or focus a day for its breakdown.
 - **Tap a day** to focus on it: the other days fade, and the headline shows that day's total and how close you got to its target. Tap it again, or *Show whole week*, to go back.
-- **Headline number** for the week, with the daily average and the change against the same days of the previous week.
+- **Progress toward the weekly target**: the week's total against its target, with a bar and a pace marker showing where you'd be if every day so far had met its target ("12h 40m behind pace"). Below it: average per active day, time left to target, days on target so far, and the change against the same days of the previous week. A selected day shows its own target progress instead.
 - **Breakdown** of the week or the selected day by project, tag or task, as proportional bars with time and share.
 - **Last 12 weeks** as weekly totals against your weekly target. Click a week to jump to it.
 - Swipe the week chart sideways on a touchscreen to change week. Arrow keys move between days.

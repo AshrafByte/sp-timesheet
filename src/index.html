@@ -65,11 +65,19 @@
       <div class="ts-hero-row">
         <div>
           <div class="ts-stat-label" id="heroLabel">This week</div>
-          <div class="ts-hero" id="heroValue">0h</div>
+          <div class="ts-hero"><span id="heroValue">0h</span> <span class="ts-hero-of" id="heroOf"></span></div>
           <div class="ts-hero-sub" id="heroSub"></div>
         </div>
         <button type="button" class="ts-btn ts-btn-quiet" id="showWeekBtn" hidden>Show whole week</button>
       </div>
+      <div class="ts-goal" id="goal" hidden>
+        <div class="ts-goal-text"><span id="goalLeft"></span><span id="goalRight"></span></div>
+        <div class="ts-goal-track" id="goalBar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="ts-goal-fill" id="goalFill"></div>
+          <div class="ts-goal-pace" id="goalPace" title="Where you'd be if every day through today met its target" hidden></div>
+        </div>
+      </div>
+      <div class="ts-goal-stats" id="goalStats"></div>
       <div class="ts-chart-wrap">
         <div class="ts-chart" id="weekChart"></div>
         <div class="ts-tooltip" id="weekTooltip" hidden></div>

@@ -90,6 +90,33 @@ test('week comparison uses the same days of the previous week', () => {
   assert.equal(C.compareWithPreviousWeek(log, MON, ALL, C.addDays(MON, 30)).days, 7);
 });
 
+test('weekProgress: pace counts targets through today; days on target skip 0h days', () => {
+  const targets = [0, 8, 8, 8, 8, 8, 0]; // Sun..Sat
+  const log = logOf([
+    task('a', { [day(0)]: 9 * H, [day(1)]: 3 * H, [day(5)]: 2 * H }), // Mon over, Tue short, Sat extra
+  ]);
+  // Wednesday: Mon–Wed are "so far".
+  const wed = C.weekProgress(log, MON, ALL, targets, C.addDays(MON, 2));
+  assert.equal(wed.total, 14 * H);
+  assert.equal(wed.target, 40 * H);
+  assert.equal(wed.pace, 24 * H);
+  assert.equal(wed.daysWithTarget, 3);
+  assert.equal(wed.daysOnTarget, 1);
+  assert.equal(wed.activeDays, 3);
+  assert.equal(wed.average, (14 / 3) * H);
+
+  // After the week: pace is the whole target; the 0h Saturday doesn't count as a day with a target.
+  const later = C.weekProgress(log, MON, ALL, targets, C.addDays(MON, 10));
+  assert.equal(later.pace, later.target);
+  assert.equal(later.daysWithTarget, 5);
+  assert.equal(later.daysOnTarget, 1);
+});
+
+test('weekProgress with no targets and no time', () => {
+  const p = C.weekProgress(C.emptyLog(), MON, ALL, [0, 0, 0, 0, 0, 0, 0], C.addDays(MON, 3));
+  assert.deepEqual(p, { total: 0, target: 0, pace: 0, activeDays: 0, average: 0, daysWithTarget: 0, daysOnTarget: 0 });
+});
+
 test('breakdown by project and by task', () => {
   const log = logOf([
     task('a', { [day(0)]: H, [day(1)]: H }, { projectId: 'p1' }),
