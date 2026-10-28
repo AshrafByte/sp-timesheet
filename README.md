@@ -7,7 +7,7 @@ A weekly timesheet of the time you track in [Super Productivity](https://super-p
 - **Manual entries** for work done away from the app: calls, meetings, travel.
 - **Hours stay on record** after a task is deleted in Super Productivity. The row is marked *deleted* and keeps counting.
 - **CSV export** of the visible week, with the project and tag filters applied.
-- Filters by project (including "No project") and by tag. A tag filter also matches subtasks.
+- A compact header: week, view switch, and on the right a Filter button (project, including "No project", and tag; it shows how many are active), export, settings and Add. A tag filter also matches subtasks.
 - Follows the app's light and dark theme. Works at phone width.
 
 ### Insights

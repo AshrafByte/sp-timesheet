@@ -731,8 +731,31 @@
     $('breakdownList').replaceChildren(...rows);
   };
 
+  // The filters sit in a popover, so the button shows what's active: a count,
+  // the accent color, and the filter names in its tooltip.
+  const renderFilterButton = () => {
+    const selected = (select) => (select.selectedOptions[0] || {}).textContent || '';
+    const active = [];
+    if (state.filter.projectId !== 'all') active.push(`Project: ${selected($('projectFilter'))}`);
+    if (state.filter.tagId !== 'all') active.push(`Tag: ${selected($('tagFilter'))}`);
+    const btn = $('filterBtn');
+    btn.classList.toggle('is-active', active.length > 0);
+    btn.title = active.length ? active.join(' · ') : 'Filter by project or tag';
+    btn.setAttribute('aria-label', active.length ? `Filter, ${active.length} active` : 'Filter');
+    $('filterCount').textContent = String(active.length);
+    $('filterCount').hidden = !active.length;
+    $('clearFiltersBtn').hidden = !active.length;
+  };
+
+  const setFilterOpen = (open) => {
+    $('filterPopover').hidden = !open;
+    $('filterBtn').setAttribute('aria-expanded', String(open));
+    if (open) $('projectFilter').focus();
+  };
+
   const render = () => {
     renderFilters();
+    renderFilterButton();
     $('rangeLabel').textContent = C.formatRange(state.weekStart);
     $('nextWeek').disabled = state.weekStart >= currentWeekStart();
     const chart = state.settings.view === 'chart';
@@ -970,6 +993,24 @@
     $('tagFilter').addEventListener('change', (e) => {
       state.filter.tagId = e.target.value;
       render();
+    });
+    $('filterBtn').addEventListener('click', () => setFilterOpen($('filterPopover').hidden));
+    $('clearFiltersBtn').addEventListener('click', () => {
+      state.filter.projectId = 'all';
+      state.filter.tagId = 'all';
+      $('projectFilter').value = 'all';
+      $('tagFilter').value = 'all';
+      render();
+      $('projectFilter').focus();
+    });
+    // Close the popover on a click outside it, or on Escape.
+    document.addEventListener('click', (e) => {
+      if (!$('filterPopover').hidden && !e.target.closest('.ts-filter')) setFilterOpen(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || $('filterPopover').hidden) return;
+      setFilterOpen(false);
+      $('filterBtn').focus();
     });
     $('exportBtn').addEventListener('click', exportCsv);
     $('addEntryBtn').addEventListener('click', () => openEntryDialog());

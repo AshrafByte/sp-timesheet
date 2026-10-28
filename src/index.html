@@ -20,17 +20,31 @@
       <button type="button" role="tab" id="viewChartTab" data-view="chart" aria-controls="chartView">Insights</button>
     </div>
     <div class="ts-actions">
-      <select class="ts-select" id="projectFilter" aria-label="Filter by project">
-        <option value="all">All projects</option>
-      </select>
-      <select class="ts-select" id="tagFilter" aria-label="Filter by tag">
-        <option value="all">All tags</option>
-      </select>
-      <button type="button" class="ts-btn" id="exportBtn">Export CSV</button>
-      <button type="button" class="ts-btn ts-btn-primary" id="addEntryBtn">+ Add entry</button>
+      <div class="ts-filter">
+        <button type="button" class="ts-btn ts-filter-btn" id="filterBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="filterPopover">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"></path></svg>
+          <span class="ts-hide-sm">Filter</span>
+          <span class="ts-count" id="filterCount" hidden></span>
+        </button>
+        <div class="ts-popover" id="filterPopover" role="dialog" aria-label="Filters" hidden>
+          <label class="ts-pop-field">
+            <span class="ts-field-label">Project</span>
+            <select class="ts-select" id="projectFilter"><option value="all">All projects</option></select>
+          </label>
+          <label class="ts-pop-field">
+            <span class="ts-field-label">Tag</span>
+            <select class="ts-select" id="tagFilter"><option value="all">All tags</option></select>
+          </label>
+          <button type="button" class="ts-btn ts-btn-quiet" id="clearFiltersBtn" hidden>Clear filters</button>
+        </div>
+      </div>
+      <button type="button" class="ts-icon-btn" id="exportBtn" aria-label="Export this week as CSV" title="Export this week as CSV">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10.5 12 15.5l5-5"></path><path d="M5 19.5h14"></path></svg>
+      </button>
       <button type="button" class="ts-icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
+      <button type="button" class="ts-btn ts-btn-primary" id="addEntryBtn" aria-label="Add entry" title="Add entry">+<span class="ts-hide-sm"> Add</span></button>
     </div>
   </header>
 
