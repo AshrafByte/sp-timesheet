@@ -152,6 +152,14 @@ test('breakdown by tag: subtask time carries its own and its parent\'s tags; ove
   assert.equal(C.breakdown(log, [day(1)], ALL, 'tag').items.length, 0);
 });
 
+test('donutSlices keeps at most six slices, the smallest items sharing the last', () => {
+  const items = (...hours) => hours.map((h, i) => ({ key: `k${i}`, ms: h * H }));
+  assert.deepEqual(C.donutSlices([]), { own: 0, otherMs: 0, otherCount: 0 });
+  assert.deepEqual(C.donutSlices(items(5, 4, 3, 2, 1, 1)), { own: 6, otherMs: 0, otherCount: 0 }, 'six fit');
+  assert.deepEqual(C.donutSlices(items(5, 4, 3, 2, 1, 1, 0.5)), { own: 5, otherMs: 1.5 * H, otherCount: 2 });
+  assert.deepEqual(C.donutSlices(items(9, 8, 7, 6, 5, 4, 3, 2, 1)), { own: 5, otherMs: 10 * H, otherCount: 4 });
+});
+
 test('hourScale picks readable steps', () => {
   const hours = (scale) => ({ max: scale.max / H, ticks: scale.ticks.map((t) => t / H) });
   assert.deepEqual(hours(C.hourScale(0)), { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] });

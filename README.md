@@ -5,7 +5,7 @@ A weekly timesheet and charts for the time you track in [Super Productivity](htt
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/insights-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/insights-light.png">
-  <img alt="The Insights view: a week of tracked time as stacked columns by project, progress toward a 40-hour target, a breakdown by project, and weekly totals for the last 12 weeks." src="docs/images/insights-light.png">
+  <img alt="The Insights view: a week of tracked time as stacked columns by project, progress toward a 40-hour target, a donut of time by project with its list, and weekly totals for the last 12 weeks." src="docs/images/insights-light.png">
 </picture>
 
 <sub>Screenshots show a generated demo workload of nine projects over twelve weeks (see [Screenshots and demo data](#screenshots-and-demo-data)).</sub>
@@ -24,7 +24,7 @@ A weekly timesheet and charts for the time you track in [Super Productivity](htt
 
 - The week as one stacked column per day, colored by project, with a daily-average line and a mark at each day's target.
 - Progress toward the weekly target, with a pace marker that shows where you would be if every day so far had met its target. Alongside it: average per active day, time left to target, days on target, and the change against the previous week.
-- A breakdown of the week, or of one selected day, by project, tag or task.
+- A breakdown of the week, or of one selected day, by project, tag or task. Projects and tasks are shown as a donut with the list as its legend; hover a slice or a row to see its time and share.
 - Weekly totals for the last 12 weeks against the weekly target.
 
 **Throughout**
@@ -43,7 +43,7 @@ A weekly timesheet and charts for the time you track in [Super Productivity](htt
       <p><b>Timesheet.</b> Subtasks are listed under their parent. Manual entries and deleted tasks are labelled.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/day-selected-light.png" alt="Insights with Tuesday selected: the other days are faded and the breakdown lists the day's tasks.">
+      <img src="docs/images/day-selected-light.png" alt="Insights with Tuesday selected: the other days are faded and a donut with its list breaks the day down by task.">
       <p><b>A selected day.</b> The headline and breakdown switch to that day; here the breakdown is by task.</p>
     </td>
   </tr>

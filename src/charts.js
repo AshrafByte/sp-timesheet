@@ -216,5 +216,108 @@ const TimesheetCharts = (() => {
     };
   };
 
-  return { columnChart };
+  /**
+   * Draws a donut into `host`, replacing what was there: slices clockwise from
+   * 12 o'clock with a surface gap between them, and text in the middle that
+   * describes the whole or the hovered slice.
+   *
+   * opts:
+   *   size                outer diameter (px)
+   *   slices              [{ ms, color }]
+   *   center(i)           { value, label, note } for the middle; i = -1 for the whole
+   *   ariaLabel           the chart in words
+   *   onHover(i)          i = -1 when the pointer leaves
+   *
+   * Returns { setHover(i) } so a legend can light up its slice.
+   */
+  const donutChart = (host, opts) => {
+    const { size, slices } = opts;
+    const mid = size / 2;
+    const thickness = Math.round(size * 0.13);
+    const GROW = 3; // a hovered slice widens by this much on each side
+    const r = mid - thickness / 2 - GROW;
+    const circumference = 2 * Math.PI * r;
+    const total = slices.reduce((sum, s) => sum + s.ms, 0);
+
+    const root = svg('svg', { width: size, height: size, viewBox: `0 0 ${size} ${size}`, class: 'ts-svg' });
+    const ring = svg('g', { transform: `rotate(-90 ${mid} ${mid})` });
+    let start = 0;
+    const arcs = slices.map((slice) => {
+      const len = total > 0 ? (slice.ms / total) * circumference : 0;
+      const gap = slices.length > 1 ? Math.min(GAP, len / 2) : 0;
+      const arc = svg('circle', {
+        class: 'ts-slice',
+        cx: mid,
+        cy: mid,
+        r,
+        fill: 'none',
+        style: `stroke:${slice.color}`,
+        'stroke-width': thickness,
+        'stroke-dasharray': `${len - gap} ${circumference}`,
+        'stroke-dashoffset': -start,
+      });
+      start += len;
+      return arc;
+    });
+    ring.append(...arcs);
+    root.append(ring);
+
+    const el = (cls) => Object.assign(document.createElement('div'), { className: cls });
+    const wrap = el('ts-donut');
+    wrap.style.width = wrap.style.height = `${size}px`;
+    wrap.setAttribute('role', 'img');
+    wrap.setAttribute('aria-label', opts.ariaLabel);
+    const middle = el('ts-donut-center');
+    middle.setAttribute('aria-hidden', 'true');
+    middle.style.padding = `0 ${Math.round(thickness + GROW + 10)}px`;
+    const value = el('ts-donut-value');
+    const label = el('ts-donut-label');
+    const note = el('ts-donut-note');
+    middle.append(value, label, note);
+    wrap.append(root, middle);
+
+    let hovered = -1;
+    const setHover = (i) => {
+      if (hovered >= 0 && arcs[hovered]) {
+        arcs[hovered].classList.remove('is-hover');
+        arcs[hovered].setAttribute('stroke-width', thickness);
+      }
+      hovered = arcs[i] ? i : -1;
+      wrap.classList.toggle('is-hover', hovered >= 0);
+      if (hovered >= 0) {
+        arcs[hovered].classList.add('is-hover');
+        arcs[hovered].setAttribute('stroke-width', thickness + GROW * 2);
+      }
+      const text = opts.center(hovered);
+      value.textContent = text.value;
+      label.textContent = text.label;
+      note.textContent = text.note || '';
+      note.hidden = !text.note;
+    };
+    const hover = (i) => {
+      setHover(i);
+      if (opts.onHover) opts.onHover(hovered);
+    };
+
+    // Mouse hover; on touch, a tap shows a slice and a second tap clears it.
+    let lastPointer = '';
+    arcs.forEach((arc, i) => {
+      arc.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
+      arc.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'touch') hover(i);
+      });
+      arc.addEventListener('click', () => {
+        if (lastPointer === 'touch') hover(hovered === i ? -1 : i);
+      });
+    });
+    root.addEventListener('pointerleave', (e) => {
+      if (e.pointerType !== 'touch') hover(-1);
+    });
+
+    setHover(-1);
+    host.replaceChildren(wrap);
+    return { setHover };
+  };
+
+  return { columnChart, donutChart };
 })();

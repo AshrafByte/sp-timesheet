@@ -555,6 +555,16 @@ const TimesheetCore = (() => {
     return { total, overlapping, items: sorted };
   };
 
+  // A donut stays readable up to six slices: with more items, the first five
+  // (largest) get their own slice and the rest share one. `own` is how many
+  // items have their own slice; `otherMs` and `otherCount` describe the shared one.
+  const DONUT_SLICES = 6;
+  const donutSlices = (items, max = DONUT_SLICES) => {
+    const own = items.length > max ? max - 1 : items.length;
+    const rest = items.slice(own);
+    return { own, otherMs: rest.reduce((sum, item) => sum + item.ms, 0), otherCount: rest.length };
+  };
+
   // Axis maximum and ticks on readable hour steps (0, 2h, 4h, 6h...), with at
   // most `maxSteps` steps and at least 1h of range.
   const HOUR_STEPS = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 24, 48, 96];
@@ -1041,6 +1051,7 @@ const TimesheetCore = (() => {
     compareWithPreviousWeek,
     weekProgress,
     breakdown,
+    donutSlices,
     hourScale,
     buildCsv,
     encodeState,

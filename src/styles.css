@@ -374,9 +374,47 @@ button { cursor: pointer; }
 .ts-bd-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
 .ts-bd-more { justify-self: start; }
 
+/* With a donut, the list is its legend: no bars, a divider between rows. */
+.ts-bd-body.has-donut { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 48px; align-items: center; }
+.ts-breakdown.has-donut { gap: 0; }
+.ts-breakdown.has-donut .ts-bd-row { padding: 9px 0; }
+.ts-breakdown.has-donut .ts-bd-row + .ts-bd-row { border-top: 1px solid var(--ts-divider); }
+.ts-breakdown.has-donut .ts-bd-more { margin-top: 10px; }
+.ts-bd-body + .ts-hint { margin: 14px 0 0; }
+.ts-bd-group { display: flex; align-items: center; gap: 8px; padding: 14px 0 4px; font-size: 0.78rem; color: var(--ts-muted); }
+.ts-bd-group b { font-weight: 600; color: var(--ts-text); }
+.ts-breakdown [data-slice] { transition: opacity 0.2s ease; }
+.ts-breakdown.is-linking [data-slice]:not(.is-linked) { opacity: 0.4; }
+
+.ts-donut { position: relative; }
+.ts-slice { transition: opacity 0.2s ease, stroke-width 0.15s ease; }
+.ts-donut.is-hover .ts-slice:not(.is-hover) { opacity: 0.35; }
+.ts-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+.ts-donut-value { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.ts-donut-label {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: var(--ts-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.ts-donut-note { font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
 @media (prefers-reduced-motion: reduce) {
   .ts-grow { animation: none; }
-  .ts-col, .ts-col-band, .ts-bd-fill, .ts-progress-fill, .ts-goal-fill { transition: none; }
+  .ts-col, .ts-col-band, .ts-bd-fill, .ts-progress-fill, .ts-goal-fill, .ts-slice, .ts-breakdown [data-slice] { transition: none; }
 }
 
 /* ---------- Day cards ---------- */
@@ -591,6 +629,8 @@ button { cursor: pointer; }
   .ts-row > .ts-tags { display: none; }
   .ts-stats { gap: 20px; }
   .ts-card { padding: 16px 14px; }
+  .ts-bd-body.has-donut { grid-template-columns: minmax(0, 1fr); gap: 16px; justify-items: center; }
+  .ts-bd-body.has-donut .ts-breakdown { justify-self: stretch; }
   .ts-hero { font-size: 2.25rem; }
   /* Icon-only Filter and Add, so the view switch and actions share a row. */
   .ts-header { gap: 10px; }

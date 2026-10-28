@@ -842,31 +842,69 @@
     if (refocusTrend >= 0 || trendHover >= 0) trendCtl.setHover(refocusTrend >= 0 ? refocusTrend : trendHover);
   };
 
+  // The breakdown donut: its chart and the item key behind each slice. The
+  // hovered slice is kept as a key, so it survives a redraw.
+  const DONUT_SIZE = 208;
+  const OTHER_SLICE = '\0other';
+  let donut = null;
+  let donutHoverKey = null;
+
+  // Lights up the list rows of slice i (-1 for none) and dims the rest.
+  const hoverSlice = (i) => {
+    donutHoverKey = i >= 0 && donut ? donut.keys[i] : null;
+    const list = $('breakdownList');
+    list.classList.toggle('is-linking', i >= 0);
+    for (const el of list.querySelectorAll('[data-slice]')) el.classList.toggle('is-linked', Number(el.dataset.slice) === i);
+  };
+
   const renderBreakdown = (bd, slots, day) => {
     const by = state.settings.breakdownBy;
     $('breakdownTitle').textContent = day ? C.formatDayHeading(day.date) : weekTitle();
     for (const btn of document.querySelectorAll('[data-by]')) btn.setAttribute('aria-checked', String(btn.dataset.by === by));
     $('breakdownNote').hidden = !(by === 'tag' && bd.overlapping);
 
+    // A donut shows parts of one whole. Tags can overlap (a task with two tags
+    // counts toward both) and a single item is the whole, so those keep bars.
+    const withDonut = by !== 'tag' && bd.items.length > 1;
+    $('breakdownBody').classList.toggle('has-donut', withDonut);
+    $('breakdownList').classList.toggle('has-donut', withDonut);
+    $('breakdownDonut').hidden = !withDonut;
+    if (!withDonut) {
+      donut = null;
+      $('breakdownDonut').replaceChildren();
+    }
+
     if (!bd.items.length) {
       $('breakdownList').replaceChildren(h('div', { class: 'ts-muted ts-small', text: 'No time tracked' }));
       return;
     }
+    const colorOf = (item) => (by === 'tag' ? 'var(--ts-series-1)' : seriesColor(slots, by === 'project' ? item.key : item.projectKey));
+    const labelOf = (item) => (by === 'project' ? projectName(item.key)
+      : by === 'tag' && item.key !== C.NO_TAG ? item.label || (state.tagsById[item.key] || {}).title || 'Unnamed tag'
+        : item.label);
+    const share = (ms) => (bd.total ? (ms / bd.total) * 100 : 0);
+    const shareText = (ms) => (share(ms) > 0 && share(ms) < 1 ? '<1%' : `${Math.round(share(ms))}%`);
+    const { own, otherMs, otherCount } = withDonut ? C.donutSlices(bd.items) : { own: bd.items.length, otherMs: 0, otherCount: 0 };
+
     const shown = state.breakdownExpanded ? bd.items : bd.items.slice(0, BREAKDOWN_LIMIT);
-    const rows = shown.map((item) => {
-      const color = by === 'tag' ? 'var(--ts-series-1)' : seriesColor(slots, by === 'project' ? item.key : item.projectKey);
-      const label = by === 'project' ? projectName(item.key)
-        : by === 'tag' && item.key !== C.NO_TAG ? item.label || (state.tagsById[item.key] || {}).title || 'Unnamed tag'
-          : item.label;
-      const pct = bd.total ? (item.ms / bd.total) * 100 : 0;
-      return h('div', { class: 'ts-bd-row' },
+    const rows = [];
+    shown.forEach((item, index) => {
+      // The items that share the Other slice are listed under its own heading.
+      if (withDonut && index === own) {
+        rows.push(h('div', { class: 'ts-bd-group', dataset: { slice: own } },
+          h('span', { class: 'ts-swatch', style: { background: 'var(--ts-series-other)' } }),
+          h('span', {}, h('b', { text: 'Other' }), ` · ${otherCount} more · ${shareText(otherMs)}`)));
+      }
+      const color = colorOf(item);
+      const label = labelOf(item);
+      rows.push(h('div', { class: 'ts-bd-row', dataset: withDonut ? { slice: Math.min(index, own) } : null },
         h('div', { class: 'ts-bd-name' },
           by !== 'tag' && h('span', { class: 'ts-swatch', style: { background: color } }),
           h('span', { class: 'ts-bd-label', text: label, title: label })),
         h('div', { class: 'ts-bd-time', text: fmt(item.ms) }),
-        h('div', { class: 'ts-bd-pct', text: pct > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%` }),
-        h('div', { class: 'ts-bd-track', 'aria-hidden': 'true' },
-          h('div', { class: 'ts-bd-fill', style: { width: `${Math.min(100, pct)}%`, background: color } })));
+        h('div', { class: 'ts-bd-pct', text: shareText(item.ms) }),
+        !withDonut && h('div', { class: 'ts-bd-track', 'aria-hidden': 'true' },
+          h('div', { class: 'ts-bd-fill', style: { width: `${Math.min(100, share(item.ms))}%`, background: color } }))));
     });
     if (bd.items.length > BREAKDOWN_LIMIT) {
       rows.push(h('button', {
@@ -877,6 +915,28 @@
       }));
     }
     $('breakdownList').replaceChildren(...rows);
+    if (!withDonut) return;
+
+    const slices = bd.items.slice(0, own).map((item) => ({ ms: item.ms, color: colorOf(item), label: labelOf(item) }));
+    if (otherCount) slices.push({ ms: otherMs, color: 'var(--ts-series-other)', label: 'Other' });
+    const [one, many] = by === 'task' ? ['task', 'tasks'] : ['project', 'projects'];
+    const count = bd.items.length;
+    donut = {
+      keys: slices.map((_, i) => (i < own ? bd.items[i].key : OTHER_SLICE)),
+      ctl: TimesheetCharts.donutChart($('breakdownDonut'), {
+        size: DONUT_SIZE,
+        slices,
+        center: (i) => (i < 0
+          ? { value: fmt(bd.total), label: `${count} ${count === 1 ? one : many}` }
+          : { value: fmt(slices[i].ms), label: slices[i].label, note: shareText(slices[i].ms) }),
+        ariaLabel: `Time by ${one}: ${slices.map((s) => `${s.label} ${shareText(s.ms)}`).join(', ')}`,
+        onHover: hoverSlice,
+      }),
+    };
+    // Put a hover back after a redraw (a running timer redraws every minute).
+    const restore = donutHoverKey == null ? -1 : donut.keys.indexOf(donutHoverKey);
+    donut.ctl.setHover(restore);
+    hoverSlice(restore);
   };
 
   // The filters sit in a popover, so the button shows what's active: a count,
@@ -1274,6 +1334,19 @@
       if (!e.target.closest('[data-action="toggle-breakdown"]')) return;
       state.breakdownExpanded = !state.breakdownExpanded;
       renderInsights();
+    });
+    // Hovering a row lights up its slice, as hovering a slice lights up its rows.
+    $('breakdownList').addEventListener('pointerover', (e) => {
+      if (!donut || e.pointerType === 'touch') return;
+      const el = e.target.closest('[data-slice]');
+      const i = el ? Number(el.dataset.slice) : -1;
+      donut.ctl.setHover(i);
+      hoverSlice(i);
+    });
+    $('breakdownList').addEventListener('pointerleave', (e) => {
+      if (!donut || e.pointerType === 'touch') return;
+      donut.ctl.setHover(-1);
+      hoverSlice(-1);
     });
     $('showWeekBtn').addEventListener('click', () => {
       state.chartSelected = null;
