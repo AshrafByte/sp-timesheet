@@ -16,6 +16,7 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - Rows of tasks that still exist in Super Productivity are read-only. Editing them used to be overwritten by the next refresh.
 - The plugin no longer has permission to delete tasks.
 - Debug output is off unless enabled in settings. The storage debug line is gone.
+- The released `index.html` has comments and whitespace removed, which keeps it under the 100 KB limit of older Super Productivity versions (75 KB now). The build refuses to produce anything larger.
 - Default first day of the week for new installs is Monday. Existing settings are kept.
 - Super Productivity's built-in "Today" tag is no longer shown.
 

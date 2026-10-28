@@ -16,5 +16,8 @@
     "build": "node scripts/build.mjs",
     "test": "node --test \"tests/*.test.mjs\"",
     "dev": "node scripts/build.mjs && node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   }
 }

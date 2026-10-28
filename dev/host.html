@@ -36,7 +36,9 @@
       const frame = document.createElement('iframe');
       frame.setAttribute('data-plugin-id', 'sp-timesheet');
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals');
-      frame.src = '../dist/dev.html' + location.search;
+      // ?release=1 runs the minified release code instead of the readable one.
+      const page = new URLSearchParams(location.search).has('release') ? 'dev-release.html' : 'dev.html';
+      frame.src = `../dist/${page}${location.search}`;
       document.getElementById('view').replaceChildren(frame);
     },
     async downloadFile(filename, data) {

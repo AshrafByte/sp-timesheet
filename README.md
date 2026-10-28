@@ -48,16 +48,20 @@ Storage is split into one key per month, so a running timer only rewrites the cu
 
 ## Development
 
-Needs Node 20 or newer. There are no dependencies to install.
+Needs Node 20 or newer. The only dependency is esbuild, which the build uses for minifying; it is pinned to an exact version.
 
 ```bash
+npm ci          # once: install the pinned esbuild
 npm test        # unit tests, storage tests, build checks
 npm run build   # dist/: the plugin zip to install, listing entry
 npm run dev     # build, then serve on http://localhost:5178
 ```
 
 - `http://localhost:5178/dist/dev.html` runs the view against a mock API with sample data and a running timer. Options: `?theme=light`, `?host=old` (no keyed storage), `?seed=v1` (start from 1.x data), `?reset=1`, `?timer=0`. `window.__mock` in the console can delete tasks, finish the day, or simulate a sync from another device.
-- `http://localhost:5178/dev/host.html` runs the built `plugin.js` in a stand-in app window, which covers the CSV export.
+- `http://localhost:5178/dist/dev-release.html` is the same with the minified release code.
+- `http://localhost:5178/dev/host.html` runs the built `plugin.js` in a stand-in app window, which covers the CSV export. Add `?release=1` for the release code.
+
+**Size limit.** Super Productivity versions before the 1 MB limit ([#10578](https://github.com/super-productivity/super-productivity/issues/10578)) reject an `index.html` over 100 KB. The release copy has comments and whitespace removed (names are kept, so it still reads like the source). The build stops with an error above 100 KB and warns above 90 KB.
 
 ### Layout
 
@@ -76,7 +80,7 @@ npm run dev     # build, then serve on http://localhost:5178
 ### Releasing
 
 1. Bump `version` in `src/manifest.json`, add a `CHANGELOG.md` entry, then `npm test`.
-2. `npm run build`. The zip is reproducible, so rebuilding the same source gives the same SHA-256.
+2. `npm ci && npm run build`. The zip is reproducible: the same source and the pinned esbuild give the same SHA-256, so a reviewer can rebuild it and compare.
 3. Create release `vX.Y.Z` on GitHub and attach `dist/sp-timesheet-vX.Y.Z.zip`.
 4. Open a PR to [super-productivity](https://github.com/super-productivity/super-productivity) that adds or updates the entry in `src/assets/community-plugins.json` with the contents of `dist/community-plugins-entry.json`.
 

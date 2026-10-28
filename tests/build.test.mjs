@@ -41,11 +41,14 @@ test('build produces a flat, self-contained, reproducible zip', () => {
   assert.equal(zipped.version, manifest.version);
   assert.ok(first.length < 10 * 1024 * 1024, 'listing limit is 10 MB');
 
-  const html = files.find((f) => f.name === 'index.html').data.toString();
+  const htmlFile = files.find((f) => f.name === 'index.html');
+  assert.ok(htmlFile.data.length <= 100 * 1024, `index.html is ${htmlFile.data.length} bytes; app versions before the 1 MB limit reject more than 100 KB`);
+  const html = htmlFile.data.toString();
   assert.doesNotMatch(html, /<!-- @(inline|dev)/, 'every marker was replaced');
   assert.doesNotMatch(html, /__mock|mock-api/, 'the dev mock is not shipped');
   assert.doesNotMatch(html, /<script[^>]+src=|<link[^>]+href=/i, 'no external scripts or stylesheets');
-  assert.match(html, /const TimesheetCore = /);
+  assert.match(html, /const TimesheetCore\s*=/);
+  assert.match(html, /const TimesheetCharts\s*=/);
 
   build();
   const second = readFileSync(zipPath);
