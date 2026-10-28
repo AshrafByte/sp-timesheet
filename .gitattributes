@@ -1,0 +1,6 @@
+# LF everywhere, whatever core.autocrlf says: the release zip's SHA-256 is
+# pinned in the plugin listing, so a Windows checkout must build the same bytes.
+* text=auto eol=lf
+
+*.zip binary
+*.png binary
