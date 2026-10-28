@@ -130,6 +130,7 @@ Timesheet makes no network requests. It reads tasks, projects, tags and the app'
 | --- | --- |
 | `getTasks`, `getArchivedTasks` | Tracked time per task and day, including archived tasks. |
 | `getAllProjects`, `getAllTags` | Names and colors for rows, filters and charts. |
+| `getAppState` | The app's *First day of week*, date locale and *Start of next day*, read once each time the view opens. |
 | `loadSyncedData`, `persistDataSynced`, `listSyncedDataKeys` | Reading and saving Timesheet's own data. |
 | `showSnack` | Short messages, such as a failed save. |
 | `downloadFile` | Saving CSV exports and backups. |

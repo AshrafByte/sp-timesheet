@@ -15,6 +15,7 @@
     "getArchivedTasks",
     "getAllProjects",
     "getAllTags",
+    "getAppState",
     "persistDataSynced",
     "loadSyncedData",
     "listSyncedDataKeys",

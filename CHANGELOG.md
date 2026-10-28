@@ -21,7 +21,7 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - "Today" follows Super Productivity's *Start of next day* setting.
 - The view used last is remembered per device and no longer synced.
 - Rows of tasks that still exist in Super Productivity are read-only. Editing them used to be overwritten by the next refresh.
-- The plugin no longer has permission to delete tasks.
+- The plugin no longer has permission to delete tasks. The manifest now lists every API it uses, including `getAppState` for the app's week start and start of day.
 - Debug output is off unless enabled in settings. The storage debug line is gone.
 - The released `index.html` is minified, which keeps it under the 100 KB limit of older Super Productivity versions. The build refuses to produce anything larger. The build is reproducible, so the release can be checked against the source.
 - New installs follow Super Productivity's first day of the week. Existing settings are kept.
@@ -35,7 +35,8 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - Week start on any weekday, or following Super Productivity's setting.
 - Setting for which view opens: the one used last, Timesheet, or Insights.
 - Backup and restore (⚙ › Backup). Restoring only adds what's missing.
-- Keyboard access to rows, native dialogs (Esc closes them), progress bars announced to screen readers.
+- Keyboard access to rows, native dialogs (Esc closes them), progress bars announced to screen readers, and focus rings in the accent color.
+- With reduced motion turned on in the system, charts and progress bars don't animate and opening the view jumps to today instead of scrolling.
 
 ### Removed
 - **Auto-delete finished tasks.** It ran only while the Timesheet view was open, so in practice it deleted done tasks the next time you opened the view. It went ahead even when saving the tasks' hours had failed. Super Productivity's *Finish Day* already archives done tasks with their time kept, and Timesheet reads archived tasks.
