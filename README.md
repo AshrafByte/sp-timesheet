@@ -52,7 +52,7 @@ Needs Node 20 or newer. There are no dependencies to install.
 
 ```bash
 npm test        # unit tests, storage tests, build checks
-npm run build   # dist/: unpacked plugin, release zip, listing entry
+npm run build   # dist/: the plugin zip to install, listing entry
 npm run dev     # build, then serve on http://localhost:5178
 ```
 

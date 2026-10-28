@@ -1,6 +1,7 @@
 // Builds the plugin:
-//   dist/sp-timesheet/            unpacked plugin (Load Plugin from Folder)
-//   dist/sp-timesheet-vX.Y.Z.zip  release asset, files at the zip root
+//   dist/sp-timesheet-vX.Y.Z.zip  the plugin: install it with Settings → Plugins →
+//                                 Choose Plugin File, or attach it to a release
+//   dist/sp-timesheet/            the same files unzipped, for reading
 //   dist/community-plugins-entry.json  the entry for Super Productivity's listing
 //   dist/dev.html                 the view with a mock PluginAPI, for the browser
 //
@@ -85,8 +86,8 @@ await writeFile(new URL('community-plugins-entry.json', dist), `${JSON.stringify
 
 const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
 console.log(`✓ ${manifest.name} ${manifest.version}`);
-console.log(`  dist/${manifest.id}/          unpacked plugin`);
-console.log(`  dist/${zipName}  ${kb(zip.length)}`);
+console.log(`  dist/${zipName}  ${kb(zip.length)}  ← install this (Settings → Plugins → Choose Plugin File)`);
 console.log(`  sha256 ${sha256}`);
+console.log(`  dist/${manifest.id}/          the same files unzipped`);
 console.log('  dist/community-plugins-entry.json');
 console.log('  dist/dev.html                 open via `npm run dev`');
