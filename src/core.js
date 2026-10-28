@@ -90,6 +90,8 @@ const TimesheetCore = (() => {
 
   const WEEK_START_OPTIONS = [1, 0, 6];
   const TIME_FORMAT_OPTIONS = ['hm', 'decimal'];
+  const VIEW_OPTIONS = ['sheet', 'chart'];
+  const BREAKDOWN_OPTIONS = ['project', 'tag', 'task'];
 
   const DEFAULT_SETTINGS = Object.freeze({
     weekStartsOn: 1,
@@ -97,6 +99,8 @@ const TimesheetCore = (() => {
     timeFormat: 'hm',
     showSubtasks: true,
     debugLogging: false,
+    view: 'sheet',
+    breakdownBy: 'project',
   });
 
   const clampHours = (value) => {
@@ -117,6 +121,8 @@ const TimesheetCore = (() => {
       timeFormat: TIME_FORMAT_OPTIONS.includes(src.timeFormat) ? src.timeFormat : DEFAULT_SETTINGS.timeFormat,
       showSubtasks: typeof src.showSubtasks === 'boolean' ? src.showSubtasks : DEFAULT_SETTINGS.showSubtasks,
       debugLogging: src.debugLogging === true,
+      view: VIEW_OPTIONS.includes(src.view) ? src.view : DEFAULT_SETTINGS.view,
+      breakdownBy: BREAKDOWN_OPTIONS.includes(src.breakdownBy) ? src.breakdownBy : DEFAULT_SETTINGS.breakdownBy,
     };
   };
 
@@ -357,6 +363,135 @@ const TimesheetCore = (() => {
   };
 
   const sumCounted = (rows) => rows.reduce((sum, r) => sum + r.counted, 0);
+
+  // ---------- Chart data ----------
+
+  const PALETTE_SIZE = 8;
+  const OTHER = '__other__';
+  const NO_TAG = '__notag__';
+
+  const projectKey = (entry) => entry.projectId || NO_PROJECT;
+
+  /**
+   * Project key → color slot. Slots go to the projects with the most tracked
+   * time overall, computed from the whole log and not from the filtered week on
+   * screen, so a project keeps its color while you browse and filter. With
+   * more projects than colors, the top seven keep theirs and the rest share
+   * "Other" (a key missing from the map).
+   */
+  const assignProjectSlots = (log) => {
+    const totals = new Map();
+    const titles = new Map();
+    for (const entry of Object.values(log.entries)) {
+      if (entry.parentId && log.entries[entry.parentId]) continue; // already in the parent's time
+      const key = projectKey(entry);
+      const sum = Object.values(entry.byDate).reduce((a, b) => a + b, 0);
+      totals.set(key, (totals.get(key) || 0) + sum);
+      if (entry.projectTitle) titles.set(key, entry.projectTitle);
+    }
+    const ranked = [...totals]
+      .sort((a, b) => b[1] - a[1] || String(titles.get(a[0]) || '').localeCompare(String(titles.get(b[0]) || '')))
+      .map(([key]) => key);
+    const named = ranked.length <= PALETTE_SIZE ? ranked : ranked.slice(0, PALETTE_SIZE - 1);
+    return new Map(named.map((key, i) => [key, i]));
+  };
+
+  // One day's counted time per project color, bottom of the stack first
+  // ("Other" on top).
+  const daySegments = (rows, slots) => {
+    const byKey = new Map();
+    for (const row of rows) {
+      const key = slots.has(projectKey(row.entry)) ? projectKey(row.entry) : OTHER;
+      byKey.set(key, (byKey.get(key) || 0) + row.counted);
+    }
+    const order = (key) => (key === OTHER ? Infinity : slots.get(key));
+    return [...byKey].map(([key, ms]) => ({ key, ms })).sort((a, b) => order(a.key) - order(b.key));
+  };
+
+  const weekChart = (log, weekStart, filter, slots) => weekDates(weekStart).map((date) => {
+    const dateStr = toDateStr(date);
+    const rows = rowsForDay(log, dateStr, filter);
+    return { date, dateStr, total: sumCounted(rows), segments: daySegments(rows, slots) };
+  });
+
+  const dayTotal = (log, date, filter) => sumCounted(rowsForDay(log, toDateStr(date), filter));
+
+  // Totals for `count` weeks, oldest first, the last one starting at lastWeekStart.
+  const weekTotals = (log, lastWeekStart, count, filter) => Array.from({ length: count }, (_, i) => {
+    const weekStart = addDays(lastWeekStart, (i - count + 1) * 7);
+    return { weekStart, total: weekDates(weekStart).reduce((sum, d) => sum + dayTotal(log, d, filter), 0) };
+  });
+
+  /**
+   * The week on screen against the week before, over the same days. For the
+   * current week that's only the days so far, so a week in progress isn't
+   * measured against a whole one. Null for a week that hasn't started.
+   */
+  const compareWithPreviousWeek = (log, weekStart, filter, today = new Date()) => {
+    const todayStr = toDateStr(today);
+    const days = weekDates(weekStart).filter((d) => toDateStr(d) <= todayStr).length;
+    if (!days) return null;
+    const total = (start) => weekDates(start).slice(0, days).reduce((sum, d) => sum + dayTotal(log, d, filter), 0);
+    return { current: total(weekStart), previous: total(addDays(weekStart, -7)), days };
+  };
+
+  // Where a row's counted time was tracked, with the tags that apply there:
+  // subtask time carries the subtask's tags plus the parent's, and time on the
+  // parent itself carries the parent's.
+  const tagShares = (row) => {
+    const withParentTags = (tags) => [...new Map([...tags, ...row.entry.tags].map((t) => [t.id, t])).values()];
+    const shares = row.children.map((child) => ({ ms: child.ms, tags: withParentTags(child.entry.tags) }));
+    const rest = row.counted - shares.reduce((sum, s) => sum + s.ms, 0);
+    if (rest > 0) shares.push({ ms: rest, tags: row.entry.tags });
+    return shares;
+  };
+
+  /**
+   * Time per project, tag or task over the given days, biggest first:
+   * { total, overlapping, items: [{ key, label, ms, projectKey }] }.
+   * Tags overlap: a task with two tags counts toward both, so tag items can
+   * add up to more than the total (`overlapping` says when that happened). A
+   * tag label is null when the log never learned the tag's name.
+   */
+  const breakdown = (log, dateStrs, filter, by) => {
+    const items = new Map();
+    let total = 0;
+    let overlapping = false;
+    const add = (key, label, ms, project) => {
+      const item = items.get(key) || { key, label, ms: 0, projectKey: project };
+      item.ms += ms;
+      items.set(key, item);
+    };
+    for (const dateStr of dateStrs) {
+      for (const row of rowsForDay(log, dateStr, filter)) {
+        total += row.counted;
+        const project = projectKey(row.entry);
+        if (by === 'project') {
+          add(project, row.entry.projectTitle || 'No project', row.counted, project);
+        } else if (by === 'task') {
+          add(row.id, row.entry.title, row.counted, project);
+        } else {
+          for (const share of tagShares(row)) {
+            if (share.tags.length > 1) overlapping = true;
+            if (!share.tags.length) add(NO_TAG, 'No tag', share.ms, null);
+            for (const tag of share.tags) add(tag.id, tag.title, share.ms, null);
+          }
+        }
+      }
+    }
+    const sorted = [...items.values()].sort((a, b) => b.ms - a.ms || String(a.label || '').localeCompare(String(b.label || '')));
+    return { total, overlapping, items: sorted };
+  };
+
+  // Axis maximum and ticks on readable hour steps (0, 2h, 4h, 6h...), with at
+  // most `maxSteps` steps and at least 1h of range.
+  const HOUR_STEPS = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 24, 48, 96];
+  const hourScale = (maxMs, maxSteps = 4) => {
+    const maxH = Math.max(maxMs / HOUR_MS, 1);
+    const step = HOUR_STEPS.find((s) => Math.ceil(maxH / s - 1e-9) <= maxSteps) || HOUR_STEPS[HOUR_STEPS.length - 1];
+    const steps = Math.ceil(maxH / step - 1e-9);
+    return { max: steps * step * HOUR_MS, ticks: Array.from({ length: steps + 1 }, (_, i) => i * step * HOUR_MS) };
+  };
 
   // ---------- CSV ----------
 
@@ -603,6 +738,15 @@ const TimesheetCore = (() => {
     removeEntryDay,
     rowsForDay,
     sumCounted,
+    OTHER,
+    NO_TAG,
+    projectKey,
+    assignProjectSlots,
+    weekChart,
+    weekTotals,
+    compareWithPreviousWeek,
+    breakdown,
+    hourScale,
     buildCsv,
     encodeState,
     decodeState,

@@ -20,6 +20,7 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - Super Productivity's built-in "Today" tag is no longer shown.
 
 ### Added
+- **Insights view**: the week as stacked columns per day (colored by project) with a daily-average line and target marks; tap a day to focus on it; a headline total with the change against the same days of last week; a breakdown by project, tag or task; and the last 12 weeks against the weekly target. Hover and keyboard tooltips, swipe to change week, light and dark palettes checked for color-blind separation.
 - CSV export of the visible week, with filters applied.
 - "No project" filter. Tag filters also match subtasks.
 - Time format setting (`3h 45m` or `3.75h`) and a setting to hide subtask rows.

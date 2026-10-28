@@ -45,6 +45,8 @@
     { id: 'p-client', title: 'Client Portal', theme: { primary: '#e91e63' } },
     { id: 'p-internal', title: 'Internal', theme: { primary: '#43a047' } },
     { id: 'p-learning', title: 'Learning', theme: { primary: '#fb8c00' } },
+    { id: 'p-ops', title: 'Operations', theme: { primary: '#8e24aa' } },
+    { id: 'p-design', title: 'Design System', theme: { primary: '#00897b' } },
   ];
   const tags = [
     { id: 'TODAY', title: 'Today' },
@@ -72,11 +74,33 @@
     task('report', 'Write weekly report', days([[0, 40 * M]]), { projectId: 'p-internal', tagIds: ['TODAY', 't-urgent'] }),
     task('course', 'Angular signals course', days([[-1, 75 * M], [-4, 2 * H], [-9, H]]), { projectId: 'p-learning', tagIds: ['t-deep'] }),
     task('email', 'Reply to <b>emails</b> & "quotes"', days([[0, 20 * M], [-2, 35 * M]])),
+    task('incident', 'Fix flaky deploy pipeline', days([[-1, 50 * M], [-2, 95 * M]]), { projectId: 'p-ops', tagIds: ['t-urgent'] }),
+    task('tokens', 'Color tokens review', days([[0, 35 * M], [-2, 40 * M]]), { projectId: 'p-design', tagIds: ['t-meeting', 't-deep'] }),
     task('idea', 'Untracked idea', {}),
   ];
   let archived = [
     task('onboarding', 'Onboard new teammate', days([[-7, 3 * H], [-9, 2 * H]]), { projectId: 'p-internal', isDone: true }),
   ];
+
+  // Twelve weeks of finished work, so the trend chart has something to show.
+  // A small seeded generator keeps it the same on every load.
+  let seed = 7;
+  const rand = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  const historyProjects = ['p-client', 'p-internal', 'p-ops', 'p-design', 'p-learning', null];
+  for (let offset = -84; offset <= -3; offset++) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    if (d.getDay() === 0 || (d.getDay() === 6 && rand() < 0.7)) continue;
+    const count = 1 + Math.floor(rand() * 3);
+    for (let n = 0; n < count; n++) {
+      const project = historyProjects[Math.floor(rand() * historyProjects.length)];
+      const minutes = 20 + Math.floor(rand() * 200);
+      archived.push(task(`hist${offset}-${n}`, `Archived work ${-offset}.${n}`, days([[offset, minutes * M]]), { projectId: project, isDone: true }));
+    }
+  }
 
   // ---------- Storage (persisted in localStorage so reloads keep it) ----------
   if (params.get('reset')) localStorage.removeItem(STORAGE_KEY);

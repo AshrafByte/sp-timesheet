@@ -13,6 +13,29 @@
   --ts-warn: var(--c-warn, #ff4d4f);
   --ts-hover: var(--bg-darker, rgba(127, 127, 127, 0.08));
   --ts-radius: 12px;
+
+  /* Chart series: a categorical palette checked for color-blind separation
+     and contrast against the app's card colors, in this order. Light steps
+     here, dark steps under .ts-dark. */
+  --ts-series-1: #2a78d6;
+  --ts-series-2: #eb6834;
+  --ts-series-3: #1baf7a;
+  --ts-series-4: #eda100;
+  --ts-series-5: #e87ba4;
+  --ts-series-6: #008300;
+  --ts-series-7: #6250d6;
+  --ts-series-8: #e34948;
+  --ts-series-other: #898781;
+}
+:root.ts-dark {
+  --ts-series-1: #3987e5;
+  --ts-series-2: #d95926;
+  --ts-series-3: #199e70;
+  --ts-series-4: #c98500;
+  --ts-series-5: #d55181;
+  --ts-series-6: #008300;
+  --ts-series-7: #9085e9;
+  --ts-series-8: #e66767;
 }
 
 * { box-sizing: border-box; }
@@ -147,12 +170,145 @@ button { cursor: pointer; }
 
 .ts-toolbar {
   display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.ts-status { margin: 0 0 12px; font-size: 0.8rem; }
+.ts-status:empty { display: none; }
+.ts-small { font-size: 0.8rem; }
+
+/* ---------- Segmented controls ---------- */
+
+.ts-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 10px;
+  background: var(--ts-card);
+}
+.ts-seg button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ts-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ts-seg button:hover { color: var(--ts-text); }
+.ts-seg button[aria-selected="true"],
+.ts-seg button[aria-checked="true"] { background: var(--ts-primary); color: #fff; }
+.ts-seg button:focus-visible { outline: 2px solid var(--ts-primary); outline-offset: 1px; }
+.ts-seg-sm { padding: 2px; }
+.ts-seg-sm button { height: 24px; padding: 0 10px; font-size: 0.75rem; }
+
+/* ---------- Insights ---------- */
+
+.ts-insights { display: grid; gap: 14px; }
+.ts-card {
+  background: var(--ts-card);
+  border: 1px solid var(--ts-divider);
+  border-radius: var(--ts-radius);
+  padding: 20px 22px;
+  min-width: 0;
+}
+.ts-card-head {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-  min-height: 36px;
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+.ts-card-title { margin: 0; font-size: 0.98rem; font-weight: 600; }
+
+.ts-hero-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 12px; margin-bottom: 6px; }
+.ts-hero-row > div { flex: 1 1 240px; min-width: 0; }
+.ts-hero { font-size: 2.75rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.ts-hero-sub { margin-top: 2px; font-size: 0.85rem; color: var(--ts-muted); }
+
+.ts-chart-wrap { position: relative; }
+.ts-chart { width: 100%; touch-action: pan-y; }
+.ts-svg { display: block; user-select: none; -webkit-user-select: none; }
+.ts-gridline { stroke: var(--ts-divider); stroke-width: 1; }
+.ts-baseline { stroke: var(--ts-muted); stroke-opacity: 0.45; stroke-width: 1; }
+.ts-tick { fill: var(--ts-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ts-xlabel { fill: var(--ts-text); font-size: 12px; }
+.ts-xlabel.is-strong { font-weight: 700; }
+.ts-xlabel.is-muted, .ts-xsub { fill: var(--ts-muted); }
+.ts-xsub { font-size: 11px; }
+/* The halo in the card color keeps the label readable over grid and average lines. */
+.ts-cap {
+  fill: var(--ts-text);
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--ts-card);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.ts-avg-line { stroke: var(--ts-text); stroke-opacity: 0.5; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.ts-target-tick { stroke: var(--ts-text); stroke-opacity: 0.4; stroke-width: 2; stroke-linecap: round; }
+.ts-col { transition: opacity 0.2s ease; }
+.ts-col.is-dimmed { opacity: 0.35; }
+.ts-col.is-hover.is-dimmed { opacity: 0.6; }
+.ts-col-band { fill: var(--ts-hover); opacity: 0; transition: opacity 0.15s ease; }
+.ts-col.is-hover .ts-col-band { opacity: 1; }
+.ts-hit { fill: transparent; cursor: pointer; outline: none; }
+.ts-hit:focus-visible { stroke: var(--ts-primary); stroke-width: 2; }
+
+.ts-grow {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: ts-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes ts-grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+.ts-tooltip {
+  position: absolute;
+  z-index: 5;
+  min-width: 150px;
+  max-width: 240px;
+  padding: 10px 12px;
+  border: 1px solid var(--ts-divider);
+  border-radius: 10px;
+  background: var(--ts-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   font-size: 0.8rem;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 12px));
+}
+.ts-tip-value { font-size: 1rem; font-weight: 700; }
+.ts-tip-label { margin-bottom: 6px; color: var(--ts-muted); }
+.ts-tip-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.ts-tip-key { width: 12px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.ts-tip-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ts-muted); }
+.ts-tip-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.ts-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 0.78rem; color: var(--ts-muted); }
+.ts-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.ts-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.ts-key-line { width: 16px; border-top: 2px dashed var(--ts-text); opacity: 0.5; flex-shrink: 0; }
+.ts-key-tick { width: 14px; height: 2px; border-radius: 1px; background: var(--ts-text); opacity: 0.4; flex-shrink: 0; }
+
+.ts-breakdown { display: grid; gap: 14px; }
+.ts-bd-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: 6px 12px; }
+.ts-bd-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 0.88rem; }
+.ts-bd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-bd-time { font-size: 0.88rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.ts-bd-pct { font-size: 0.78rem; color: var(--ts-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.ts-bd-track { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--ts-divider); overflow: hidden; }
+.ts-bd-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+.ts-bd-more { justify-self: start; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-grow { animation: none; }
+  .ts-col, .ts-col-band, .ts-bd-fill, .ts-progress-fill { transition: none; }
 }
 
 /* ---------- Day cards ---------- */
@@ -341,4 +497,6 @@ button { cursor: pointer; }
   .ts-row { grid-template-columns: minmax(120px, 1.6fr) minmax(90px, 1fr) 80px; }
   .ts-row > .ts-tags { display: none; }
   .ts-stats { gap: 20px; }
+  .ts-card { padding: 16px 14px; }
+  .ts-hero { font-size: 2.25rem; }
 }

@@ -10,6 +10,19 @@ A weekly timesheet of the time you track in [Super Productivity](https://super-p
 - Filters by project (including "No project") and by tag. A tag filter also matches subtasks.
 - Follows the app's light and dark theme. Works at phone width.
 
+### Insights
+
+Switch from **Timesheet** to **Insights** at the top for a picture of the week:
+
+- **The week as stacked columns**, one per day, colored by project, with a dashed daily-average line and a mark at each day's target. Hover or focus a day for its breakdown.
+- **Tap a day** to focus on it: the other days fade, and the headline shows that day's total and how close you got to its target. Tap it again, or *Show whole week*, to go back.
+- **Headline number** for the week, with the daily average and the change against the same days of the previous week.
+- **Breakdown** of the week or the selected day by project, tag or task, as proportional bars with time and share.
+- **Last 12 weeks** as weekly totals against your weekly target. Click a week to jump to it.
+- Swipe the week chart sideways on a touchscreen to change week. Arrow keys move between days.
+
+A project keeps its color across weeks and filters. Colors go to the projects with the most tracked time overall, from a palette checked for color-blind separation in both themes. With more than eight projects, the smaller ones share "Other".
+
 ## Install
 
 From the app: **Settings → Plugins → Community Plugins → Timesheet → Install** (once listed).
@@ -51,7 +64,8 @@ npm run dev     # build, then serve on http://localhost:5178
 | Path | What it is |
 | --- | --- |
 | `src/manifest.json` | Plugin manifest. The version here is the only version. |
-| `src/core.js` | Logic with no DOM or API access: dates, durations, the time log, CSV, storage. |
+| `src/core.js` | Logic with no DOM or API access: dates, durations, the time log, chart data, CSV, storage. |
+| `src/charts.js` | SVG column charts, drawn from plain data. |
 | `src/app.js` | The view: fetching, saving, rendering, dialogs. |
 | `src/index.html`, `src/styles.css` | Markup and styles. The build inlines CSS and JS into `index.html`. |
 | `src/plugin.js` | Runs in the app: the sidebar entry and saving CSV exports. |

@@ -60,7 +60,7 @@ test('build produces a flat, self-contained, reproducible zip', () => {
 test('the inlined scripts parse', () => {
   const html = readFileSync(new URL(`dist/${manifest.id}/index.html`, root), 'utf8');
   const scripts = [...html.matchAll(/<script>\n([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-  assert.equal(scripts.length, 2);
+  assert.equal(scripts.length, 3);
   for (const code of scripts) assert.doesNotThrow(() => new Function(code));
   assert.doesNotThrow(() => new Function(readFileSync(new URL('src/plugin.js', root), 'utf8')));
 });

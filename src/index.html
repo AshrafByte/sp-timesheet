@@ -15,6 +15,10 @@
       <button type="button" class="ts-icon-btn" id="nextWeek" aria-label="Next week">›</button>
       <button type="button" class="ts-btn" id="todayBtn">Today</button>
     </nav>
+    <div class="ts-seg" role="tablist" aria-label="View">
+      <button type="button" role="tab" id="viewSheetTab" data-view="sheet" aria-controls="sheetView">Timesheet</button>
+      <button type="button" role="tab" id="viewChartTab" data-view="chart" aria-controls="chartView">Insights</button>
+    </div>
     <div class="ts-actions">
       <select class="ts-select" id="projectFilter" aria-label="Filter by project">
         <option value="all">All projects</option>
@@ -30,14 +34,59 @@
     </div>
   </header>
 
-  <section class="ts-summary" id="weekSummary" aria-label="Week summary"></section>
+  <p class="ts-status ts-muted" id="statusLine" role="status"></p>
 
-  <div class="ts-toolbar">
-    <span class="ts-muted" id="statusLine"></span>
-    <button type="button" class="ts-btn ts-btn-quiet" id="collapseAllBtn">Collapse all</button>
+  <div id="sheetView" role="tabpanel" aria-labelledby="viewSheetTab">
+    <section class="ts-summary" id="weekSummary" aria-label="Week summary"></section>
+
+    <div class="ts-toolbar">
+      <button type="button" class="ts-btn ts-btn-quiet" id="collapseAllBtn">Collapse all</button>
+    </div>
+
+    <div class="ts-days" id="daysContainer"></div>
   </div>
 
-  <div class="ts-days" id="daysContainer"></div>
+  <div id="chartView" class="ts-insights" role="tabpanel" aria-labelledby="viewChartTab" hidden>
+    <section class="ts-card" aria-labelledby="heroLabel">
+      <div class="ts-hero-row">
+        <div>
+          <div class="ts-stat-label" id="heroLabel">This week</div>
+          <div class="ts-hero" id="heroValue">0h</div>
+          <div class="ts-hero-sub" id="heroSub"></div>
+        </div>
+        <button type="button" class="ts-btn ts-btn-quiet" id="showWeekBtn" hidden>Show whole week</button>
+      </div>
+      <div class="ts-chart-wrap">
+        <div class="ts-chart" id="weekChart"></div>
+        <div class="ts-tooltip" id="weekTooltip" hidden></div>
+      </div>
+      <div class="ts-legend" id="weekLegend"></div>
+    </section>
+
+    <section class="ts-card" aria-labelledby="breakdownTitle">
+      <div class="ts-card-head">
+        <h2 class="ts-card-title" id="breakdownTitle">This week</h2>
+        <div class="ts-seg ts-seg-sm" role="radiogroup" aria-label="Group time by">
+          <button type="button" role="radio" data-by="project">Projects</button>
+          <button type="button" role="radio" data-by="tag">Tags</button>
+          <button type="button" role="radio" data-by="task">Tasks</button>
+        </div>
+      </div>
+      <div class="ts-breakdown" id="breakdownList"></div>
+      <p class="ts-hint" id="breakdownNote" hidden>A task with several tags counts toward each of them, so these can add up to more than the total.</p>
+    </section>
+
+    <section class="ts-card" aria-labelledby="trendTitle">
+      <div class="ts-card-head">
+        <h2 class="ts-card-title" id="trendTitle">Last 12 weeks</h2>
+        <span class="ts-muted ts-small" id="trendSub"></span>
+      </div>
+      <div class="ts-chart-wrap">
+        <div class="ts-chart" id="trendChart"></div>
+        <div class="ts-tooltip" id="trendTooltip" hidden></div>
+      </div>
+    </section>
+  </div>
 </main>
 
 <dialog class="ts-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
@@ -112,6 +161,7 @@
 
 <!-- @dev mock-api.js -->
 <!-- @inline core.js -->
+<!-- @inline charts.js -->
 <!-- @inline app.js -->
 </body>
 </html>

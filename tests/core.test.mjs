@@ -80,6 +80,8 @@ test('coerceSettings keeps valid values and replaces invalid ones', () => {
     timeFormat: 'decimal',
     showSubtasks: false,
     debugLogging: false,
+    view: 'sheet',
+    breakdownBy: 'project',
   });
   const d = C.coerceSettings({ weekStartsOn: 3, dailyTargetHours: [1, 2], timeFormat: 'x' });
   assert.equal(d.weekStartsOn, 1);

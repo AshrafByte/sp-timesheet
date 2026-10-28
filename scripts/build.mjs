@@ -70,7 +70,7 @@ const sha256 = createHash('sha256').update(zip).digest('hex');
 const repo = String(pkg.repository?.url || '').replace(/\.git$/, '');
 const entry = {
   name: manifest.name,
-  shortDescription: 'Weekly timesheet of tracked time with daily target progress, manual entries, CSV export, and hours kept after a task is deleted.',
+  shortDescription: 'Weekly timesheet and charts of your tracked time: days by project, a 12-week trend, daily targets, manual entries, CSV export, and hours kept after a task is deleted.',
   url: repo,
   author: pkg.author,
   authorUrl: repo.replace(/\/[^/]+$/, ''),

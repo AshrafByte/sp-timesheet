@@ -39,6 +39,9 @@
     archivedTasks: null,
     filter: { projectId: 'all', tagId: 'all' },
     collapsed: new Set(),
+    chartSelected: null, // the day picked in Insights ('YYYY-MM-DD'), or null for the whole week
+    breakdownExpanded: false,
+    animateCharts: true,
     userRevision: 0, // bumped by every edit made in this view
   };
 
@@ -464,8 +467,7 @@
     $('collapseAllBtn').textContent = dates.every((d) => state.collapsed.has(d)) ? 'Expand all' : 'Collapse all';
   };
 
-  const render = () => {
-    renderFilters();
+  const renderSheet = () => {
     const days = C.weekDates(state.weekStart);
     let weekTotal = 0;
     let activeDays = 0;
@@ -477,22 +479,292 @@
       if (total > 0) activeDays++;
       return dayCard(day, dateStr, rows, total);
     });
-    $('rangeLabel').textContent = C.formatRange(state.weekStart);
-    $('nextWeek').disabled = state.weekStart >= currentWeekStart();
     $('daysContainer').replaceChildren(...cards);
     renderSummary(days, weekTotal, activeDays);
     updateCollapseAllLabel();
+  };
+
+  // ---------- Insights ----------
+
+  const LONG_DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const BREAKDOWN_LIMIT = 8;
+  const TREND_WEEKS = 12;
+
+  const shortDate = (d) => `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  const weekTitle = () => (+state.weekStart === +currentWeekStart() ? 'This week' : `Week of ${shortDate(state.weekStart)}`);
+
+  const seriesColor = (slots, key) =>
+    slots.has(key) ? `var(--ts-series-${slots.get(key) + 1})` : 'var(--ts-series-other)';
+
+  const projectName = (key) => {
+    if (key === C.OTHER) return 'Other';
+    if (key === C.NO_PROJECT) return 'No project';
+    const option = projectOptions().find((p) => p.id === key);
+    return option ? option.title : 'Unknown project';
+  };
+
+  const tickLabel = (ms) => {
+    if (ms === 0) return '0';
+    if (ms < C.HOUR_MS) return `${Math.round(ms / 60000)}m`;
+    return `${Math.round((ms / C.HOUR_MS) * 100) / 100}h`;
+  };
+
+  const tipRow = (keyClass, color, name, value) => h('div', { class: 'ts-tip-row' },
+    h('span', { class: keyClass, style: color ? { background: color } : null }),
+    h('span', { class: 'ts-tip-name', text: name }),
+    h('span', { class: 'ts-tip-num', text: value }));
+
+  // Positions a tooltip over `anchor` (px inside its chart), kept inside the card.
+  const placeTooltip = (tip, anchor, content) => {
+    if (!anchor) {
+      tip.hidden = true;
+      return;
+    }
+    tip.replaceChildren(...content.filter(Boolean));
+    tip.hidden = false;
+    const wrapWidth = tip.parentElement.clientWidth;
+    const half = tip.offsetWidth / 2;
+    tip.style.left = `${Math.min(Math.max(anchor.x, half + 4), wrapWidth - half - 4)}px`;
+    tip.style.top = `${Math.max(anchor.y, tip.offsetHeight + 12)}px`;
+  };
+
+  const focusedHit = (host) => [...host.querySelectorAll('.ts-hit')].indexOf(document.activeElement);
+
+  let insightsKey = '';
+  let weekHover = -1;
+  let trendHover = -1;
+  let swiped = false;
+
+  const renderInsights = () => {
+    const width = Math.floor($('weekChart').clientWidth);
+    if (!width) return; // hidden; drawn when shown
+    const slots = C.assignProjectSlots(state.log);
+    const week = C.weekChart(state.log, state.weekStart, state.filter, slots);
+    const todayStr = C.toDateStr(new Date());
+    const targets = week.map((d) => (state.settings.dailyTargetHours[d.date.getDay()] || 0) * C.HOUR_MS);
+    if (!week.some((d) => d.dateStr === state.chartSelected)) state.chartSelected = null;
+    const selected = week.findIndex((d) => d.dateStr === state.chartSelected);
+    const weekTotal = week.reduce((sum, d) => sum + d.total, 0);
+    const activeDays = week.filter((d) => d.total > 0).length;
+    const average = activeDays ? weekTotal / activeDays : 0;
+    const by = state.settings.breakdownBy;
+    const bd = C.breakdown(state.log, selected >= 0 ? [week[selected].dateStr] : week.map((d) => d.dateStr), state.filter, by);
+
+    // Keep the shown week in the trend window; otherwise end it at this week.
+    const thisWeek = currentWeekStart();
+    const trendEnd = state.weekStart < C.addDays(thisWeek, -7 * (TREND_WEEKS - 1))
+      ? C.addDays(state.weekStart, 7 * (TREND_WEEKS - 1))
+      : thisWeek;
+    const trend = C.weekTotals(state.log, trendEnd, TREND_WEEKS, state.filter);
+
+    // Redrawing every few seconds (a running timer) would restart hover and
+    // focus for nothing, so only redraw when something visible changed.
+    const animate = state.animateCharts && state.loaded;
+    const key = JSON.stringify([width, state.settings, filterSignature, todayStr, +state.weekStart, selected,
+      week.map((d) => d.segments), trend.map((t) => t.total), bd, state.breakdownExpanded, [...slots]]);
+    if (key === insightsKey && !animate) return;
+    insightsKey = key;
+    if (animate) state.animateCharts = false;
+
+    // Hero
+    const day = selected >= 0 ? week[selected] : null;
+    $('heroLabel').textContent = day ? `${LONG_DAY_NAMES[day.date.getDay()]}, ${shortDate(day.date)}` : weekTitle();
+    $('heroValue').textContent = fmt(day ? day.total : weekTotal);
+    $('showWeekBtn').hidden = !day;
+    if (day) {
+      const target = targets[selected];
+      $('heroSub').textContent = `${target ? `${Math.round((day.total / target) * 100)}% of ${fmt(target)} target` : 'No target this day'} · Week ${fmt(weekTotal)}`;
+    } else {
+      const parts = [activeDays ? `Daily average ${fmt(average)}` : 'Nothing tracked yet'];
+      const cmp = C.compareWithPreviousWeek(state.log, state.weekStart, state.filter);
+      if (cmp && cmp.previous > 0) {
+        const change = Math.round(((cmp.current - cmp.previous) / cmp.previous) * 100);
+        const period = cmp.days < 7 ? 'same days last week' : 'the week before';
+        parts.push(change === 0 ? `Same as ${period}` : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}% vs ${period}`);
+      } else if (cmp && cmp.current > 0) {
+        parts.push('Nothing tracked the week before');
+      }
+      $('heroSub').textContent = parts.join(' · ');
+    }
+
+    // Week chart
+    const weekHost = $('weekChart');
+    const refocusWeek = focusedHit(weekHost);
+    const maxIndex = week.reduce((best, d, i) => (d.total > week[best].total ? i : best), 0);
+    const capIndex = selected >= 0 ? selected : maxIndex;
+    const weekTip = (i) => {
+      const d = week[i];
+      const future = d.dateStr > todayStr;
+      return [
+        h('div', { class: 'ts-tip-value', text: future ? 'Not yet' : fmt(d.total) }),
+        h('div', { class: 'ts-tip-label', text: C.formatDayHeading(d.date) }),
+        ...[...d.segments].reverse().map((s) => tipRow('ts-tip-key', seriesColor(slots, s.key), projectName(s.key), fmt(s.ms))),
+        targets[i] > 0 && tipRow('ts-key-tick', null, 'Target', fmt(targets[i])),
+      ];
+    };
+    const weekCtl = TimesheetCharts.columnChart(weekHost, {
+      width,
+      height: 240,
+      scale: C.hourScale(Math.max(...week.map((d) => d.total), ...targets)),
+      formatTick: tickLabel,
+      selected,
+      average: activeDays > 1 ? average : null,
+      animate,
+      capLabel: week[capIndex].total > 0 ? { index: capIndex, text: fmt(week[capIndex].total) } : null,
+      columns: week.map((d, i) => ({
+        label: C.DAY_NAMES[d.date.getDay()],
+        sublabel: String(d.date.getDate()),
+        total: d.total,
+        segments: d.segments.map((s) => ({ ...s, color: seriesColor(slots, s.key) })),
+        target: targets[i],
+        strong: d.dateStr === todayStr,
+        muted: d.dateStr > todayStr,
+        ariaLabel: `${C.formatDayHeading(d.date)}: ${fmt(d.total)}${targets[i] ? ` of ${fmt(targets[i])} target` : ''}`,
+      })),
+      onHover: (i, anchor) => {
+        weekHover = i;
+        placeTooltip($('weekTooltip'), anchor, i >= 0 ? weekTip(i) : []);
+      },
+      onSelect: (i) => {
+        if (swiped) {
+          swiped = false;
+          return;
+        }
+        if (week[i].dateStr > todayStr) return;
+        state.chartSelected = state.chartSelected === week[i].dateStr ? null : week[i].dateStr;
+        state.breakdownExpanded = false;
+        renderInsights();
+      },
+    });
+    // A redraw replaces the focused column; put focus and the tooltip back
+    // (focus() alone doesn't fire a focus event in every case).
+    if (refocusWeek >= 0) weekCtl.focus(refocusWeek);
+    if (refocusWeek >= 0 || weekHover >= 0) weekCtl.setHover(refocusWeek >= 0 ? refocusWeek : weekHover);
+
+    // Legend: every project in the week (a single one needs no key), plus the lines.
+    const keys = [...new Set(week.flatMap((d) => d.segments.map((s) => s.key)))];
+    const legend = keys.length > 1
+      ? keys.map((k) => h('span', { class: 'ts-legend-item' },
+        h('span', { class: 'ts-swatch', style: { background: seriesColor(slots, k) } }), projectName(k)))
+      : [];
+    if (activeDays > 1) legend.push(h('span', { class: 'ts-legend-item' }, h('span', { class: 'ts-key-line' }), 'Daily average'));
+    if (targets.some((t) => t > 0)) legend.push(h('span', { class: 'ts-legend-item' }, h('span', { class: 'ts-key-tick' }), 'Target'));
+    $('weekLegend').replaceChildren(...legend);
+
+    renderBreakdown(bd, slots, day);
+
+    // 12-week trend: the week on screen in color, the others gray.
+    const trendHost = $('trendChart');
+    const refocusTrend = focusedHit(trendHost);
+    const weekTarget = state.settings.dailyTargetHours.reduce((a, b) => a + b, 0) * C.HOUR_MS;
+    const shown = trend.findIndex((t) => +t.weekStart === +state.weekStart);
+    const slot = (width - 40) / TREND_WEEKS;
+    const every = slot >= 52 ? 1 : slot >= 30 ? 2 : 3;
+    const tracked = trend.filter((t) => t.total > 0);
+    $('trendSub').textContent = tracked.length
+      ? `Average ${fmt(tracked.reduce((s, t) => s + t.total, 0) / tracked.length)} per week${weekTarget ? ` · target ${fmt(weekTarget)}` : ''}`
+      : '';
+    const trendCtl = TimesheetCharts.columnChart(trendHost, {
+      width,
+      height: 170,
+      scale: C.hourScale(Math.max(...trend.map((t) => t.total), weekTarget)),
+      formatTick: tickLabel,
+      average: weekTarget || null,
+      animate,
+      capLabel: shown >= 0 && trend[shown].total > 0 ? { index: shown, text: fmt(trend[shown].total) } : null,
+      columns: trend.map((t, i) => ({
+        label: (TREND_WEEKS - 1 - i) % every === 0 ? shortDate(t.weekStart) : '',
+        total: t.total,
+        segments: [{ key: 'week', ms: t.total, color: i === shown ? 'var(--ts-series-1)' : 'var(--ts-series-other)' }],
+        strong: i === shown,
+        ariaLabel: `Week of ${shortDate(t.weekStart)}: ${fmt(t.total)}`,
+      })),
+      onHover: (i, anchor) => {
+        trendHover = i;
+        placeTooltip($('trendTooltip'), anchor, i >= 0 ? [
+          h('div', { class: 'ts-tip-value', text: fmt(trend[i].total) }),
+          h('div', { class: 'ts-tip-label', text: `Week of ${shortDate(trend[i].weekStart)}` }),
+          weekTarget > 0 && tipRow('ts-key-line', null, 'Target', fmt(weekTarget)),
+        ] : []);
+      },
+      onSelect: (i) => setWeek(trend[i].weekStart),
+    });
+    if (refocusTrend >= 0) trendCtl.focus(refocusTrend);
+    if (refocusTrend >= 0 || trendHover >= 0) trendCtl.setHover(refocusTrend >= 0 ? refocusTrend : trendHover);
+  };
+
+  const renderBreakdown = (bd, slots, day) => {
+    const by = state.settings.breakdownBy;
+    $('breakdownTitle').textContent = day ? C.formatDayHeading(day.date) : weekTitle();
+    for (const btn of document.querySelectorAll('[data-by]')) btn.setAttribute('aria-checked', String(btn.dataset.by === by));
+    $('breakdownNote').hidden = !(by === 'tag' && bd.overlapping);
+
+    if (!bd.items.length) {
+      $('breakdownList').replaceChildren(h('div', { class: 'ts-muted ts-small', text: 'No time tracked' }));
+      return;
+    }
+    const shown = state.breakdownExpanded ? bd.items : bd.items.slice(0, BREAKDOWN_LIMIT);
+    const rows = shown.map((item) => {
+      const color = by === 'tag' ? 'var(--ts-series-1)' : seriesColor(slots, by === 'project' ? item.key : item.projectKey);
+      const label = by === 'project' ? projectName(item.key)
+        : by === 'tag' && item.key !== C.NO_TAG ? item.label || (state.tagsById[item.key] || {}).title || 'Unnamed tag'
+          : item.label;
+      const pct = bd.total ? (item.ms / bd.total) * 100 : 0;
+      return h('div', { class: 'ts-bd-row' },
+        h('div', { class: 'ts-bd-name' },
+          by !== 'tag' && h('span', { class: 'ts-swatch', style: { background: color } }),
+          h('span', { class: 'ts-bd-label', text: label, title: label })),
+        h('div', { class: 'ts-bd-time', text: fmt(item.ms) }),
+        h('div', { class: 'ts-bd-pct', text: pct > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%` }),
+        h('div', { class: 'ts-bd-track', 'aria-hidden': 'true' },
+          h('div', { class: 'ts-bd-fill', style: { width: `${Math.min(100, pct)}%`, background: color } })));
+    });
+    if (bd.items.length > BREAKDOWN_LIMIT) {
+      rows.push(h('button', {
+        type: 'button',
+        class: 'ts-btn ts-btn-quiet ts-bd-more',
+        dataset: { action: 'toggle-breakdown' },
+        text: state.breakdownExpanded ? 'Show fewer' : `Show ${bd.items.length - BREAKDOWN_LIMIT} more`,
+      }));
+    }
+    $('breakdownList').replaceChildren(...rows);
+  };
+
+  const render = () => {
+    renderFilters();
+    $('rangeLabel').textContent = C.formatRange(state.weekStart);
+    $('nextWeek').disabled = state.weekStart >= currentWeekStart();
+    const chart = state.settings.view === 'chart';
+    for (const tab of document.querySelectorAll('[data-view]')) {
+      tab.setAttribute('aria-selected', String(tab.dataset.view === state.settings.view));
+    }
+    $('sheetView').hidden = chart;
+    $('chartView').hidden = !chart;
+    if (chart) renderInsights();
+    else renderSheet();
     $('statusLine').textContent = state.loaded ? '' : 'Loading…';
   };
 
   const scrollToToday = () => {
     const card = document.querySelector('.ts-day.is-today');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (card && state.settings.view === 'sheet') card.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const setWeek = (weekStart) => {
     state.weekStart = weekStart;
+    state.chartSelected = null;
+    state.breakdownExpanded = false;
+    state.animateCharts = true;
     render();
+  };
+
+  // View and breakdown choices: stored with the settings, without a message.
+  const setPreference = (key, value) => {
+    if (state.settings[key] === value) return;
+    state.settings = C.coerceSettings({ ...state.settings, [key]: value });
+    state.userRevision++;
+    scheduleSave(2000);
   };
 
   // ---------- Editing ----------
@@ -628,6 +900,7 @@
       targets[Number(input.dataset.day)] = input.value === '' ? 0 : Number(input.value);
     }
     state.settings = C.coerceSettings({
+      ...state.settings,
       weekStartsOn: Number($('weekStartSelect').value),
       dailyTargetHours: targets,
       timeFormat: $('timeFormatSelect').value,
@@ -701,6 +974,59 @@
     $('exportBtn').addEventListener('click', exportCsv);
     $('addEntryBtn').addEventListener('click', () => openEntryDialog());
     $('settingsBtn').addEventListener('click', openSettings);
+
+    for (const tab of document.querySelectorAll('[data-view]')) {
+      tab.addEventListener('click', () => {
+        setPreference('view', tab.dataset.view);
+        state.animateCharts = true;
+        render();
+      });
+    }
+    for (const btn of document.querySelectorAll('[data-by]')) {
+      btn.addEventListener('click', () => {
+        setPreference('breakdownBy', btn.dataset.by);
+        state.breakdownExpanded = false;
+        renderInsights();
+      });
+    }
+    $('breakdownList').addEventListener('click', (e) => {
+      if (!e.target.closest('[data-action="toggle-breakdown"]')) return;
+      state.breakdownExpanded = !state.breakdownExpanded;
+      renderInsights();
+    });
+    $('showWeekBtn').addEventListener('click', () => {
+      state.chartSelected = null;
+      renderInsights();
+    });
+
+    // Swipe the week chart sideways to change week, as on a phone.
+    let swipeStart = null;
+    $('weekChart').addEventListener('pointerdown', (e) => {
+      swipeStart = e.pointerType === 'mouse' ? null : { x: e.clientX, y: e.clientY };
+    });
+    $('weekChart').addEventListener('pointerup', (e) => {
+      if (!swipeStart) return;
+      const dx = e.clientX - swipeStart.x;
+      const dy = e.clientY - swipeStart.y;
+      swipeStart = null;
+      if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+      swiped = true; // the click that follows isn't a tap on a day
+      setTimeout(() => { swiped = false; }, 400);
+      if (dx > 0) setWeek(C.addDays(state.weekStart, -7));
+      else if (C.addDays(state.weekStart, 7) <= currentWeekStart()) setWeek(C.addDays(state.weekStart, 7));
+    });
+
+    // Charts are drawn at their real pixel width, so redraw when it changes.
+    if (typeof ResizeObserver === 'function') {
+      let lastWidth = 0;
+      new ResizeObserver(() => {
+        const width = $('weekChart').clientWidth;
+        if (width && width !== lastWidth && state.settings.view === 'chart') {
+          lastWidth = width;
+          renderInsights();
+        }
+      }).observe($('chartView'));
+    }
     $('collapseAllBtn').addEventListener('click', () => {
       const dates = C.weekDates(state.weekStart).map(C.toDateStr);
       const collapse = dates.some((d) => !state.collapsed.has(d));
@@ -780,7 +1106,10 @@
 
   const boot = async (api) => {
     state.api = api;
-    document.documentElement.style.colorScheme = api.cfg && api.cfg.theme === 'light' ? 'light' : 'dark';
+    const dark = !(api.cfg && api.cfg.theme === 'light');
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    // Chart colors have separate light and dark steps (styles.css).
+    document.documentElement.classList.toggle('ts-dark', dark);
     state.store = C.createStore(api);
     debug('storage mode:', state.store.keyed ? 'keyed' : 'single blob');
 
