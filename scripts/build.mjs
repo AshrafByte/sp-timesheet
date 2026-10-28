@@ -11,9 +11,11 @@
 // from dev/ in dist/dev.html only.
 //
 // Super Productivity before the 1 MB limit (#10578) rejects an index.html over
-// 100 KB, so the release copy has comments and whitespace removed (esbuild,
-// pinned in package-lock.json). Names are kept, so it still reads as the
-// source. dist/dev.html is not minified.
+// 100 KB, so the release copy is minified (esbuild, pinned in
+// package-lock.json). Local names are shortened; the globals the scripts share
+// (TimesheetCore, TimesheetCharts) are not. The build is reproducible, so the
+// release can be checked by rebuilding it from source. dist/dev.html is not
+// minified.
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { transform } from 'esbuild';
@@ -34,8 +36,8 @@ const tag = (file, content) => {
 const minify = async (file, code) => (await transform(code, {
   loader: file.endsWith('.css') ? 'css' : 'js',
   minifyWhitespace: true,
-  minifySyntax: false,
-  minifyIdentifiers: false,
+  minifySyntax: true,
+  minifyIdentifiers: true,
   legalComments: 'none',
   charset: 'utf8',
   target: file.endsWith('.css') ? ['chrome100', 'safari15'] : 'es2020',

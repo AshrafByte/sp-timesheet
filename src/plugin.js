@@ -1,11 +1,13 @@
 /*
  * Timesheet, host side. The UI lives in index.html. This file adds the
- * sidebar entry and saves CSV exports: the plugin iframe is sandboxed without
- * downloads, so it posts the file here and this code saves it from the app.
+ * sidebar entry and saves files the view produces (CSV exports, JSON
+ * backups): the plugin iframe is sandboxed without downloads, so it posts the
+ * file here and this code saves it from the app.
  */
 const PLUGIN_ID = 'sp-timesheet';
-const MAX_EXPORT_CHARS = 5 * 1024 * 1024;
-const EXPORT_NAME_RE = /^[\w.-]{1,120}\.csv$/;
+const MAX_EXPORT_CHARS = 20 * 1024 * 1024;
+const EXPORT_NAME_RE = /^[\w.-]{1,120}\.(csv|json)$/;
+const EXPORT_TYPES = { csv: 'text/csv;charset=utf-8', json: 'application/json' };
 
 PluginAPI.registerMenuEntry({
   label: 'Timesheet',
@@ -32,7 +34,8 @@ const saveFile = async (filename, data) => {
     return;
   }
   // Hosts without downloadFile: a regular download from the app window.
-  const url = URL.createObjectURL(new Blob([data], { type: 'text/csv;charset=utf-8' }));
+  const type = EXPORT_TYPES[filename.split('.').pop()] || 'text/plain';
+  const url = URL.createObjectURL(new Blob([data], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -53,6 +56,8 @@ const onMessage = async (event) => {
     reply(false, 'Rejected export: bad file name or content');
     return;
   }
+  // Received; saving can take a while if the app asks where to save.
+  event.source.postMessage({ type: 'SP_TIMESHEET_DOWNLOAD_ACK', requestId: msg.requestId }, '*');
   try {
     await saveFile(msg.filename, msg.data);
     reply(true);

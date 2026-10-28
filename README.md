@@ -29,22 +29,37 @@ From the app: **Settings → Plugins → Community Plugins → Timesheet → Ins
 
 By hand: download `sp-timesheet-vX.Y.Z.zip` from [Releases](https://github.com/AshrafByte/sp-timesheet/releases), then **Settings → Plugins → Choose Plugin File**. The plugin adds **Timesheet** to the sidebar.
 
+**Updating:** upload the new zip the same way, over the installed plugin. **Don't remove the plugin first.** Removing a plugin in Super Productivity deletes its saved data, on every device that syncs. Download a backup (⚙ › Backup) before big changes.
+
 ## How the numbers work
 
 - Super Productivity stores tracked time per task per day. Timesheet shows exactly that. There are no start and end times because the app doesn't record them.
-- A parent task's time already includes its subtasks, so totals count the parent once. Subtasks are listed under their parent as detail. You can turn this off in settings.
-- Time on tasks that still exist comes from Super Productivity and is edited there. Manual entries and deleted tasks can be edited or removed in the timesheet.
+- A parent task's time already includes its subtasks, so totals count the parent once. Subtasks are listed under their parent as detail. You can turn this off in settings. If a subtask is deleted, its hours still count.
+- Time on tasks that still exist comes from Super Productivity and is edited there. Manual entries and deleted tasks can be edited or removed in the timesheet. Moving an entry onto a day where it already has time adds the two.
+- "Today" follows Super Productivity's *Start of next day* setting, so a day that ends at 4 am in the app ends at 4 am here too.
 - Timesheet can only keep hours it has seen. A task deleted before Timesheet was ever opened can't be recovered.
 
 ## Settings
 
-The ⚙ button: first day of the week, target hours per weekday, time format (`3h 45m` or `3.75h`), whether subtasks are listed, and debug logging.
+The ⚙ button:
+
+- **Week starts on**: any weekday, or *Same as Super Productivity*, which follows the app's *First day of week* (or your locale when the app is on *System default*). New installs follow the app.
+- **Open on**: the view used last on this device, or always Timesheet, or always Insights.
+- Target hours per weekday, time format (`3h 45m` or `3.75h`), whether subtasks are listed, and debug logging.
+- **Backup**: download all of Timesheet's data as a file, or restore from one. Restoring adds entries and days the timesheet doesn't have and applies the backup's settings; it never removes anything.
 
 ## Data and privacy
 
-Everything stays in Super Productivity's own plugin storage and syncs with the rest of your data. There are no network requests. The plugin reads tasks, projects and tags, and never changes or deletes them.
+Everything stays in Super Productivity's own plugin storage and syncs with the rest of your data. There are no network requests. The plugin reads tasks, projects, tags and the app's settings, and never changes or deletes them.
 
-Storage is split into one key per month, so a running timer only rewrites the current month. Apps older than the keyed storage API keep everything in a single entry instead. Data from Timesheet 1.x is migrated on first start; on newer apps the 1.x entry is left in place as a backup.
+Storage is split into one key per month (more for a very busy month, since a single write is limited to 256 KB), so a running timer only rewrites the current month. Apps older than the keyed storage API keep everything in a single entry instead. Data from Timesheet 1.x is migrated on first start; on newer apps the 1.x entry is left in place as a backup.
+
+### How saved data is protected
+
+- **Other devices.** Before writing a month, Timesheet reads it again. If another device changed it, the two are merged entry by entry instead of one overwriting the other. A device opening Timesheet for the first time waits a minute before saving, so sync can bring in data from other devices first.
+- **Newer versions.** Data written by a newer version of Timesheet is never overwritten or merged into. Timesheet shows a notice, and edits that would land in that data are refused with a message instead of being lost.
+- **Failed saves.** Nothing is saved until saved data has loaded successfully. Edits that couldn't be saved are kept and retried, and saved again before any reload.
+- **Changes in Super Productivity.** A task whose tracked time is missing or in an unknown format keeps its logged hours. If many logged tasks disappear at once, for example when the archive fails to load (the app then reports no archived tasks), Timesheet checks again a minute later before marking them deleted.
 
 ## Development
 
@@ -57,11 +72,11 @@ npm run build   # dist/: the plugin zip to install, listing entry
 npm run dev     # build, then serve on http://localhost:5178
 ```
 
-- `http://localhost:5178/dist/dev.html` runs the view against a mock API with sample data and a running timer. Options: `?theme=light`, `?host=old` (no keyed storage), `?seed=v1` (start from 1.x data), `?reset=1`, `?timer=0`. `window.__mock` in the console can delete tasks, finish the day, or simulate a sync from another device.
+- `http://localhost:5178/dist/dev.html` runs the view against a mock API with sample data and a running timer. Options: `?theme=light`, `?host=old` (no keyed storage), `?seed=v1` (start from 1.x data), `?reset=1`, `?timer=0`, `?firstDay=0..6` and `?dayStart=HH:MM` (the app's settings). `window.__mock` in the console can delete tasks, finish the day, or simulate a sync from another device.
 - `http://localhost:5178/dist/dev-release.html` is the same with the minified release code.
-- `http://localhost:5178/dev/host.html` runs the built `plugin.js` in a stand-in app window, which covers the CSV export. Add `?release=1` for the release code.
+- `http://localhost:5178/dev/host.html` runs the built `plugin.js` in a stand-in app window, which covers CSV export and backups. Add `?release=1` for the release code.
 
-**Size limit.** Super Productivity versions before the 1 MB limit ([#10578](https://github.com/super-productivity/super-productivity/issues/10578)) reject an `index.html` over 100 KB. The release copy has comments and whitespace removed (names are kept, so it still reads like the source). The build stops with an error above 100 KB and warns above 90 KB.
+**Size limit.** Super Productivity versions before the 1 MB limit ([#10578](https://github.com/super-productivity/super-productivity/issues/10578)) reject an `index.html` over 100 KB, so the release copy is minified, local names included. The build stops with an error above 100 KB and warns above 90 KB. To read the shipped code, rebuild it from source (below) or open `dist/dev.html`.
 
 ### Layout
 
@@ -72,7 +87,7 @@ npm run dev     # build, then serve on http://localhost:5178
 | `src/charts.js` | SVG column charts, drawn from plain data. |
 | `src/app.js` | The view: fetching, saving, rendering, dialogs. |
 | `src/index.html`, `src/styles.css` | Markup and styles. The build inlines CSS and JS into `index.html`. |
-| `src/plugin.js` | Runs in the app: the sidebar entry and saving CSV exports. |
+| `src/plugin.js` | Runs in the app: the sidebar entry and saving exported files (CSV, backups). |
 | `scripts/` | Build, zip writer, dev server. |
 | `dev/` | Mock API and host harness, never shipped. |
 | `tests/` | `node --test` suites. |

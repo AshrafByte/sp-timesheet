@@ -39,6 +39,20 @@ const TimesheetCore = (() => {
 
   const weekDates = (weekStart) => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
+  // Super Productivity can start a new day after midnight (Settings › Misc ›
+  // Start of next day), and books time to dates by that boundary. Minutes
+  // after midnight, from its misc config.
+  const dayStartOffset = (misc) => {
+    if (!misc || typeof misc !== 'object') return 0;
+    const time = typeof misc.startOfNextDayTime === 'string' && misc.startOfNextDayTime.match(/^(\d{1,2}):(\d{2})$/);
+    const minutes = time ? Number(time[1]) * 60 + Number(time[2]) : Number(misc.startOfNextDay) * 60;
+    return Number.isFinite(minutes) && minutes > 0 && minutes < 24 * 60 ? minutes : 0;
+  };
+
+  // "Now", moved back by the day boundary, so its calendar date is the day
+  // Super Productivity is booking time to.
+  const shiftedNow = (offsetMinutes, now = new Date()) => new Date(now.getTime() - (offsetMinutes || 0) * MINUTE_MS);
+
   const formatRange = (weekStart) => {
     const end = addDays(weekStart, 6);
     const left = `${MONTH_NAMES[weekStart.getMonth()]} ${weekStart.getDate()}`;
@@ -88,20 +102,31 @@ const TimesheetCore = (() => {
 
   // ---------- Settings ----------
 
-  const WEEK_START_OPTIONS = [1, 0, 6];
+  // 'app' follows Super Productivity's own "First day of week" setting.
+  const WEEK_START_OPTIONS = ['app', 0, 1, 2, 3, 4, 5, 6];
   const TIME_FORMAT_OPTIONS = ['hm', 'decimal'];
   const VIEW_OPTIONS = ['sheet', 'chart'];
+  // 'last' reopens whichever view was used last.
+  const DEFAULT_VIEW_OPTIONS = ['last', 'sheet', 'chart'];
   const BREAKDOWN_OPTIONS = ['project', 'tag', 'task'];
 
   const DEFAULT_SETTINGS = Object.freeze({
-    weekStartsOn: 1,
+    weekStartsOn: 'app',
     dailyTargetHours: Object.freeze([0, 8, 8, 8, 8, 8, 0]), // index 0..6 = Sun..Sat
     timeFormat: 'hm',
     showSubtasks: true,
     debugLogging: false,
-    view: 'sheet',
+    view: 'sheet', // the view used last
+    defaultView: 'last',
     breakdownBy: 'project',
   });
+
+  // The weekday (0 = Sunday) a week starts on, given the setting and the day
+  // Super Productivity uses.
+  const resolveWeekStart = (setting, appFirstDay) => {
+    if (setting !== 'app') return setting;
+    return Number.isInteger(appFirstDay) && appFirstDay >= 0 && appFirstDay <= 6 ? appFirstDay : 1;
+  };
 
   const clampHours = (value) => {
     const n = Number(value);
@@ -122,6 +147,7 @@ const TimesheetCore = (() => {
       showSubtasks: typeof src.showSubtasks === 'boolean' ? src.showSubtasks : DEFAULT_SETTINGS.showSubtasks,
       debugLogging: src.debugLogging === true,
       view: VIEW_OPTIONS.includes(src.view) ? src.view : DEFAULT_SETTINGS.view,
+      defaultView: DEFAULT_VIEW_OPTIONS.includes(src.defaultView) ? src.defaultView : DEFAULT_SETTINGS.defaultView,
       breakdownBy: BREAKDOWN_OPTIONS.includes(src.breakdownBy) ? src.breakdownBy : DEFAULT_SETTINGS.breakdownBy,
     };
   };
@@ -139,8 +165,9 @@ const TimesheetCore = (() => {
   const cleanByDate = (raw) => {
     const out = {};
     if (!raw || typeof raw !== 'object') return out;
+    // A task can't have more than a day of time on one day.
     for (const [date, ms] of Object.entries(raw)) {
-      if (DATE_RE.test(date) && Number.isFinite(ms) && ms > 0) out[date] = Math.round(ms);
+      if (DATE_RE.test(date) && Number.isFinite(ms) && ms > 0) out[date] = Math.min(MAX_ENTRY_MS, Math.round(ms));
     }
     return out;
   };
@@ -184,10 +211,22 @@ const TimesheetCore = (() => {
    * `complete` is set (the caller fetched active AND archived tasks), because
    * a failed or partial fetch would otherwise flag everything it missed.
    *
-   * Returns { changed, missing }: missing counts live entries that weren't in
-   * `tasks` (a hint that a complete refresh is due).
+   * Two guards keep a change in Super Productivity's data model, or a host
+   * glitch, from wiping history:
+   * - A task without a timeSpentOnDay object is left alone, never read as
+   *   "no time".
+   * - If a complete fetch is missing a large share of the logged tasks at once
+   *   (getArchivedTasks returns [] when the archive fails to load), nothing is
+   *   flagged; the ids come back as `held` for the caller to confirm later
+   *   with `allowMassDelete`.
+   *
+   * Returns { changed, missing, held }: missing counts live entries that
+   * weren't in `tasks` (a hint that a complete refresh is due).
    */
-  const mergeLiveTasks = (log, tasks, { projectsById = {}, tagsById = {}, complete = false } = {}) => {
+  const MASS_MISSING_MIN = 20;
+  const MASS_MISSING_SHARE = 0.25;
+
+  const mergeLiveTasks = (log, tasks, { projectsById = {}, tagsById = {}, complete = false, allowMassDelete = false } = {}) => {
     let changed = false;
     const seen = new Set();
 
@@ -197,7 +236,9 @@ const TimesheetCore = (() => {
       const existing = log.entries[task.id];
       if (existing && existing.isManual) continue;
 
-      const byDate = cleanByDate(task.timeSpentOnDay);
+      const raw = task.timeSpentOnDay;
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue; // unknown shape: keep what we have
+      const byDate = cleanByDate(raw);
       if (!Object.keys(byDate).length) {
         // No tracked time left in SP, so nothing to keep.
         if (existing) {
@@ -235,17 +276,14 @@ const TimesheetCore = (() => {
       }
     }
 
-    let missing = 0;
-    for (const [id, entry] of Object.entries(log.entries)) {
-      if (entry.isManual || entry.isDeleted || seen.has(id)) continue;
-      if (complete) {
-        entry.isDeleted = true;
-        changed = true;
-      } else {
-        missing++;
-      }
-    }
-    return { changed, missing };
+    const live = Object.entries(log.entries).filter(([, e]) => !e.isManual && !e.isDeleted);
+    const missingIds = live.filter(([id]) => !seen.has(id)).map(([id]) => id);
+    if (!complete) return { changed, missing: missingIds.length, held: [] };
+
+    const mass = missingIds.length >= MASS_MISSING_MIN && missingIds.length > live.length * MASS_MISSING_SHARE;
+    if (mass && !allowMassDelete) return { changed, missing: missingIds.length, held: missingIds };
+    for (const id of missingIds) log.entries[id].isDeleted = true;
+    return { changed: changed || missingIds.length > 0, missing: 0, held: [] };
   };
 
   const markDeleted = (log, ids) => {
@@ -283,8 +321,9 @@ const TimesheetCore = (() => {
     return id;
   };
 
-  // Changes one day of an editable entry. Moving it to another date replaces
-  // that date's value. Title and project only change on manual entries.
+  // Changes one day of an editable entry. Moving it onto another date the
+  // entry already has time on adds the two. Title and project only change on
+  // manual entries.
   const updateEntry = (log, id, { fromDate, toDate, ms, title, projectId, projectTitle, projectColor }) => {
     const entry = log.entries[id];
     if (!isEditable(entry) || !validEntryTime(toDate, ms)) return false;
@@ -294,8 +333,10 @@ const TimesheetCore = (() => {
       entry.projectTitle = entry.projectId ? strOrNull(projectTitle) : null;
       entry.projectColor = entry.projectId ? safeColor(projectColor) : null;
     }
-    if (fromDate && fromDate !== toDate) delete entry.byDate[fromDate];
-    entry.byDate[toDate] = Math.round(ms);
+    const moving = fromDate && fromDate !== toDate;
+    const already = moving ? entry.byDate[toDate] || 0 : 0;
+    if (moving) delete entry.byDate[fromDate];
+    entry.byDate[toDate] = Math.min(MAX_ENTRY_MS, Math.round(ms) + already);
     return true;
   };
 
@@ -351,7 +392,11 @@ const TimesheetCore = (() => {
       if (!matchesProject(top.entry)) continue;
       const children = (childrenOf.get(top.id) || []).sort(byMsDesc);
       if (tagId === 'all' || hasTag(top.entry, tagId)) {
-        rows.push({ ...top, counted: top.ms, children, partial: false });
+        // When a subtask is deleted, Super Productivity recomputes the parent
+        // from the remaining subtasks, but the log keeps the deleted one's
+        // hours; the larger sum is the time actually tracked.
+        const childSum = children.reduce((sum, c) => sum + c.ms, 0);
+        rows.push({ ...top, counted: Math.max(top.ms, childSum), children, partial: false });
         continue;
       }
       const matching = children.filter((c) => hasTag(c.entry, tagId));
@@ -514,8 +559,12 @@ const TimesheetCore = (() => {
   // most `maxSteps` steps and at least 1h of range.
   const HOUR_STEPS = [0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 24, 48, 96];
   const hourScale = (maxMs, maxSteps = 4) => {
-    const maxH = Math.max(maxMs / HOUR_MS, 1);
-    const step = HOUR_STEPS.find((s) => Math.ceil(maxH / s - 1e-9) <= maxSteps) || HOUR_STEPS[HOUR_STEPS.length - 1];
+    const maxH = Math.min(Math.max(Number(maxMs) / HOUR_MS || 0, 1), 1e6);
+    let step = HOUR_STEPS.find((s) => Math.ceil(maxH / s - 1e-9) <= maxSteps);
+    if (!step) {
+      step = HOUR_STEPS[HOUR_STEPS.length - 1];
+      while (Math.ceil(maxH / step - 1e-9) > maxSteps) step *= 2;
+    }
     const steps = Math.ceil(maxH / step - 1e-9);
     return { max: steps * step * HOUR_MS, ticks: Array.from({ length: steps + 1 }, (_, i) => i * step * HOUR_MS) };
   };
@@ -553,7 +602,7 @@ const TimesheetCore = (() => {
             lines.push(line(date, `${row.entry.title} › ${child.entry.title}`, child.entry, row.entry, child.ms));
           }
         } else {
-          lines.push(line(date, row.entry.title, row.entry, row.entry, row.ms));
+          lines.push(line(date, row.entry.title, row.entry, row.entry, row.counted));
         }
       }
     }
@@ -563,12 +612,18 @@ const TimesheetCore = (() => {
 
   // ---------- Stored format ----------
   //
-  // 'settings'      -> { v, ...settings }
-  // 'log-YYYY-MM'   -> { v, entries: { id: entry with that month's days only } }
+  // 'settings'        -> { v, ...settings }
+  // 'log-YYYY-MM'     -> { v, entries: { id: entry with that month's days only } }
+  // 'log-YYYY-MM~2'…  -> more of the same month, when one key would be too big
   //
   // Splitting the log by month means a running timer rewrites one small key
   // instead of the whole history. Output is sorted, so the same state always
   // serializes to the same strings and unchanged keys are never rewritten.
+
+  // The host rejects a single write over 256 KB; stay well under it.
+  const MAX_KEY_CHARS = 180 * 1024;
+  const LOG_KEY_RE = /^log-(\d{4}-\d{2})(?:~\d+)?$/;
+  const isStoredKey = (key) => key === SETTINGS_KEY || LOG_KEY_RE.test(key);
 
   const safeParse = (str) => {
     if (typeof str !== 'string' || !str) return null;
@@ -581,34 +636,70 @@ const TimesheetCore = (() => {
 
   const sortedObject = (obj) => Object.fromEntries(Object.keys(obj).sort().map((k) => [k, obj[k]]));
 
+  const shardString = (entries) => JSON.stringify({ v: SCHEMA_VERSION, entries: sortedObject(entries) });
+
+  // A month's entries as one key, or several when one would be too big.
+  const encodeMonth = (month, entries) => {
+    const ids = Object.keys(entries).sort();
+    const parts = [];
+    let part = {};
+    let size = 0;
+    for (const id of ids) {
+      const entrySize = JSON.stringify(entries[id]).length + id.length + 4;
+      if (size && size + entrySize > MAX_KEY_CHARS) {
+        parts.push(part);
+        part = {};
+        size = 0;
+      }
+      part[id] = entries[id];
+      size += entrySize;
+    }
+    parts.push(part);
+    return Object.fromEntries(parts.map((p, i) => [`${LOG_KEY_PREFIX}${month}${i ? `~${i + 1}` : ''}`, shardString(p)]));
+  };
+
   const encodeState = (settings, log) => {
     const months = {};
     for (const [id, entry] of Object.entries(log.entries)) {
       for (const [date, ms] of Object.entries(entry.byDate)) {
-        const key = LOG_KEY_PREFIX + date.slice(0, 7);
-        months[key] = months[key] || {};
-        months[key][id] = months[key][id] || { ...entry, byDate: {} };
-        months[key][id].byDate[date] = ms;
+        const month = date.slice(0, 7);
+        months[month] = months[month] || {};
+        months[month][id] = months[month][id] || { ...entry, byDate: {} };
+        months[month][id].byDate[date] = ms;
       }
     }
-    const data = { [SETTINGS_KEY]: JSON.stringify({ v: SCHEMA_VERSION, ...coerceSettings(settings) }) };
-    for (const [key, entries] of Object.entries(months)) {
+    // The view used last is per device (see app.js), so it isn't synced.
+    const { view, ...synced } = coerceSettings(settings);
+    const data = { [SETTINGS_KEY]: JSON.stringify(sortedObject({ v: SCHEMA_VERSION, ...synced })) };
+    for (const [month, entries] of Object.entries(months)) {
       for (const entry of Object.values(entries)) entry.byDate = sortedObject(entry.byDate);
-      data[key] = JSON.stringify({ v: SCHEMA_VERSION, entries: sortedObject(entries) });
+      Object.assign(data, encodeMonth(month, entries));
     }
     return sortedObject(data);
   };
 
+  // A stored value this version can read: a JSON object with v === SCHEMA_VERSION.
+  const readable = (str) => {
+    const parsed = safeParse(str);
+    return parsed && typeof parsed === 'object' && parsed.v === SCHEMA_VERSION ? parsed : null;
+  };
+
+  /**
+   * Stored keys → settings and log. `unreadable` lists keys this version
+   * can't read (written by a newer version, or damaged). They must never be
+   * overwritten; see createStore's protect().
+   */
   const decodeState = (data) => {
-    const settingsRaw = safeParse(data[SETTINGS_KEY]);
-    const settings = coerceSettings(settingsRaw && settingsRaw.v === SCHEMA_VERSION ? settingsRaw : null);
+    const unreadable = Object.keys(data).filter((k) => isStoredKey(k) && data[k] && !readable(data[k]));
+    const settingsRaw = readable(data[SETTINGS_KEY]);
+    const settings = coerceSettings(settingsRaw);
     const log = emptyLog();
     // Oldest month first, so the newest month's copy of an entry's details wins.
-    const logKeys = Object.keys(data).filter((k) => /^log-\d{4}-\d{2}$/.test(k)).sort();
+    const logKeys = Object.keys(data).filter((k) => LOG_KEY_RE.test(k)).sort();
     for (const key of logKeys) {
-      const parsed = safeParse(data[key]);
-      if (!parsed || parsed.v !== SCHEMA_VERSION || !parsed.entries || typeof parsed.entries !== 'object') continue;
-      const month = key.slice(LOG_KEY_PREFIX.length);
+      const parsed = readable(data[key]);
+      if (!parsed || !parsed.entries || typeof parsed.entries !== 'object') continue;
+      const month = key.match(LOG_KEY_RE)[1];
       for (const [id, raw] of Object.entries(parsed.entries)) {
         const entry = normalizeEntry(raw);
         if (!entry) continue;
@@ -619,7 +710,52 @@ const TimesheetCore = (() => {
         log.entries[id] = { ...entry, byDate: { ...(prev ? prev.byDate : {}), ...Object.fromEntries(days) } };
       }
     }
-    return { settings, log };
+    return { settings, log, unreadable };
+  };
+
+  /**
+   * Three-way merge of one stored key, for when storage no longer holds what
+   * this device last read or wrote (`base`): another device wrote it, or this
+   * device never saw it. `ours` is what this device wants to write, `theirs`
+   * what storage holds now. Per entry (per field, for settings):
+   * - only one side changed it: that side's version, including a removal;
+   * - both changed it: ours;
+   * - it's new on one side: kept.
+   * Every device merges before it writes, so an entry missing from `theirs`
+   * that we had seen was removed on purpose. A device that never saw any
+   * settings has only defaults to offer, so theirs win.
+   */
+  const mergeStoredValue = (key, base, ours, theirs) => {
+    if (!theirs || theirs === base) return ours;
+    if (ours === base) return theirs;
+    if (key === SETTINGS_KEY) {
+      const b = readable(base);
+      const o = readable(ours);
+      const t = readable(theirs);
+      if (!b || !o || !t) return t ? theirs : ours;
+      const merged = { ...t };
+      for (const field of Object.keys(o)) if (!sameJson(o[field], b[field])) merged[field] = o[field];
+      return JSON.stringify(sortedObject(merged));
+    }
+    const entriesOf = (str) => {
+      const parsed = readable(str);
+      return parsed && parsed.entries && typeof parsed.entries === 'object' ? parsed.entries : {};
+    };
+    const b = entriesOf(base);
+    const o = entriesOf(ours);
+    const t = entriesOf(theirs);
+    const unchangedByUs = (id) => id in b && id in o && sameJson(o[id], b[id]);
+    const unchangedByThem = (id) => id in b && id in t && sameJson(t[id], b[id]);
+    const merged = {};
+    for (const id of new Set([...Object.keys(o), ...Object.keys(t)])) {
+      if (id in o && id in t) merged[id] = unchangedByUs(id) ? t[id] : o[id];
+      else if (id in o) {
+        if (!unchangedByUs(id)) merged[id] = o[id]; // they removed it and we didn't touch it: gone
+      } else if (!unchangedByThem(id)) {
+        merged[id] = t[id]; // we removed it and they didn't touch it: gone
+      }
+    }
+    return Object.keys(merged).length ? shardString(merged) : '';
   };
 
   // v1 (1.x) kept everything in the single unkeyed blob:
@@ -656,6 +792,54 @@ const TimesheetCore = (() => {
     return {};
   };
 
+  // ---------- Backup ----------
+  //
+  // A backup file holds the same keys as storage, so it reads back through
+  // decodeState and can't drift from the stored format.
+
+  const BACKUP_APP = 'sp-timesheet';
+
+  const buildBackup = (settings, log, now = new Date()) =>
+    JSON.stringify({ app: BACKUP_APP, schema: SCHEMA_VERSION, exportedAt: now.toISOString(), data: encodeState(settings, log) });
+
+  // Throws an Error with a message fit for the user when the file can't be used.
+  const parseBackup = (text) => {
+    const parsed = safeParse(text);
+    if (!parsed || parsed.app !== BACKUP_APP || !parsed.data || typeof parsed.data !== 'object') {
+      throw new Error('That file is not a Timesheet backup.');
+    }
+    if (parsed.schema !== SCHEMA_VERSION) {
+      throw new Error('That backup is from a newer version of Timesheet. Update the plugin, then restore it.');
+    }
+    const data = Object.fromEntries(Object.entries(parsed.data).filter(([k, v]) => isStoredKey(k) && typeof v === 'string'));
+    const { settings, log } = decodeState(data);
+    return { settings, log, hasSettings: Boolean(readable(data[SETTINGS_KEY])), exportedAt: String(parsed.exportedAt || '') };
+  };
+
+  // Adds what `source` has and `target` lacks: whole entries, and days missing
+  // from entries both have. Nothing already in target is changed or removed.
+  const mergeLogs = (target, source) => {
+    const added = { entries: 0, days: 0 };
+    for (const [id, entry] of Object.entries(source.entries)) {
+      const existing = target.entries[id];
+      if (!existing) {
+        target.entries[id] = { ...entry, tags: entry.tags.map((t) => ({ ...t })), byDate: { ...entry.byDate } };
+        added.entries++;
+        continue;
+      }
+      for (const [date, ms] of Object.entries(entry.byDate)) {
+        if (!(date in existing.byDate)) {
+          existing.byDate[date] = ms;
+          added.days++;
+        }
+      }
+    }
+    return added;
+  };
+
+  // The single blob older hosts keep everything in is limited like any write.
+  const MAX_BLOB_CHARS = 240 * 1024;
+
   /**
    * Key/value storage on the plugin's synced data. Hosts with keyed storage
    * (listSyncedDataKeys exists) get one synced key per stored key. Older hosts
@@ -663,76 +847,156 @@ const TimesheetCore = (() => {
    * also silently ignore the key argument, which is why the check is on
    * listSyncedDataKeys and not on persistDataSynced.
    *
-   * save() writes only keys whose content differs from what storage holds, so
-   * re-saving data that was just loaded writes nothing. It refuses to run
-   * before a load has succeeded: with nothing known about storage, it would
-   * overwrite saved history with whatever is in memory. Calls are serialized,
-   * so a load can't interleave with a save.
+   * Guards against losing data:
+   * - save() refuses to run before a load has succeeded.
+   * - save() reads each key again before writing it. When storage no longer
+   *   holds what this device last saw (another device wrote it, or this device
+   *   never saw it), it merges instead of overwriting (mergeStoredValue) and
+   *   sets `mergedSinceLoad`, so the caller reloads and keeps the merged data.
+   * - Keys passed to protect() (from a newer version, or damaged) are never
+   *   written or removed, and a blob this version can't read makes the store
+   *   read-only.
+   * - An empty key listing while the settings key exists is treated as a
+   *   failed load, not as "nothing saved yet".
+   *
+   * Only keys whose content changed are written, so re-saving data that was
+   * just loaded writes nothing. Calls are serialized, so a load can't
+   * interleave with a save.
    */
   const createStore = (api) => {
     const keyed = typeof api.listSyncedDataKeys === 'function';
     let known = {}; // what storage holds, as far as we know
     let loaded = false;
+    let readOnly = false;
+    let mergedSinceLoad = false;
+    const protectedKeys = new Set();
     let queue = Promise.resolve();
     const serialize = (fn) => {
       const run = queue.then(fn);
       queue = run.catch(() => {});
       return run;
     };
+    const asText = (value) => (typeof value === 'string' ? value : '');
 
     const load = async () => {
+      mergedSinceLoad = false;
       if (keyed) {
-        const keys = ((await api.listSyncedDataKeys()) || [])
-          .filter((k) => k === SETTINGS_KEY || k.startsWith(LOG_KEY_PREFIX));
+        const listed = await api.listSyncedDataKeys();
+        if (!Array.isArray(listed)) throw new Error('Timesheet storage: unexpected key listing');
         const data = {};
-        for (const key of keys) {
+        for (const key of listed.filter(isStoredKey)) {
           const value = await api.loadSyncedData(key);
-          if (value) data[key] = value;
+          if (value == null || value === '') continue;
+          if (typeof value === 'string') data[key] = value;
+          else protectedKeys.add(key); // not text: leave it alone
         }
-        if (Object.keys(data).length) {
+        if (Object.keys(data).length || protectedKeys.size) {
           known = { ...data };
           loaded = true;
           return data;
         }
+        // Every save writes the settings key, so an empty listing with settings
+        // present means the listing is wrong, not that nothing was saved.
+        if (asText(await api.loadSyncedData(SETTINGS_KEY))) {
+          throw new Error('Timesheet storage: key listing came back empty but data exists');
+        }
         // Nothing keyed yet: first run of this version, so pick up 1.x data from
         // the unkeyed blob. It's left in place as a backup; `known` stays empty
-        // so the next save writes every key.
+        // so the next save writes every key (merging with anything already there).
         const legacy = blobToData(safeParse(await api.loadSyncedData()));
         known = {};
         loaded = true;
         return legacy;
       }
-      const parsed = safeParse(await api.loadSyncedData());
+      const raw = await api.loadSyncedData();
+      const parsed = safeParse(raw);
+      const isV1 = parsed && parsed.v === 1;
       const data = blobToData(parsed);
+      // A blob that isn't ours to read (newer version, damaged, not text) is
+      // never overwritten.
+      readOnly = raw != null && raw !== '' && !isV1 && !(parsed && parsed.v === SCHEMA_VERSION);
       known = parsed && parsed.v === SCHEMA_VERSION ? { ...data } : {};
       loaded = true;
       return data;
     };
 
-    const save = async (data) => {
+    // A non-empty value this version can't read (a newer version wrote it
+    // while this device was running): protect it, never merge into it.
+    const foreign = (key, text) => Boolean(text) && isStoredKey(key) && !readable(text);
+
+    // `base` is what this device knew storage held when the save was asked
+    // for, which is what `data` was built against. A load queued ahead of the
+    // save may move `known` on before it runs; merging against that instead
+    // would overwrite whatever the load brought in.
+    const save = async (data, base) => {
       if (!loaded) throw new Error('Timesheet storage: save() before a successful load()');
-      const keys = new Set([...Object.keys(known), ...Object.keys(data)]);
-      const changed = [...keys].filter((k) => (data[k] || '') !== (known[k] || ''));
+      if (readOnly) return 0;
+      const keys = [...new Set([...Object.keys(base), ...Object.keys(data)])].filter((k) => !protectedKeys.has(k));
+      const changed = keys.filter((k) => (data[k] || '') !== (base[k] || ''));
       if (!changed.length) return 0;
+
       if (keyed) {
+        let written = 0;
         for (const key of changed) {
-          const value = data[key] || ''; // empty string removes the key
-          await api.persistDataSynced(value, key);
+          const current = await api.loadSyncedData(key);
+          const currentText = asText(current);
+          if ((current != null && typeof current !== 'string') || foreign(key, currentText)) {
+            protectedKeys.add(key);
+            continue;
+          }
+          let value = data[key] || '';
+          if (currentText !== (base[key] || '')) {
+            value = mergeStoredValue(key, base[key] || '', value, currentText);
+            mergedSinceLoad = true;
+          }
+          if (value !== currentText) {
+            await api.persistDataSynced(value, key); // empty string removes the key
+            written++;
+          }
           if (value) known[key] = value;
           else delete known[key];
         }
-        return changed.length;
+        return written;
       }
-      const next = sortedObject(Object.fromEntries(Object.entries(data).filter(([, v]) => v)));
-      await api.persistDataSynced(JSON.stringify({ v: SCHEMA_VERSION, keys: next }));
-      known = { ...next };
+
+      const raw = await api.loadSyncedData();
+      const current = safeParse(raw);
+      const currentData = current && current.v === SCHEMA_VERSION ? blobToData(current) : null;
+      if (raw && !currentData && !(current && current.v === 1)) {
+        readOnly = true; // replaced by something this version can't read
+        return 0;
+      }
+      const next = {};
+      for (const key of new Set([...Object.keys(data), ...Object.keys(base), ...Object.keys(currentData || {})])) {
+        const theirs = currentData ? currentData[key] || '' : base[key] || '';
+        if (foreign(key, theirs)) protectedKeys.add(key);
+        let value = protectedKeys.has(key) ? theirs : data[key] || '';
+        if (!protectedKeys.has(key) && theirs !== (base[key] || '')) {
+          value = mergeStoredValue(key, base[key] || '', value, theirs);
+          mergedSinceLoad = true;
+        }
+        if (value) next[key] = value;
+      }
+      const blob = JSON.stringify({ v: SCHEMA_VERSION, keys: sortedObject(next) });
+      if (blob.length > MAX_BLOB_CHARS) {
+        throw new Error('Timesheet storage: data is too large for this version of Super Productivity; update the app');
+      }
+      if (blob !== raw) await api.persistDataSynced(blob);
+      known = sortedObject(next);
       return changed.length;
     };
 
     return {
       keyed,
+      get readOnly() { return readOnly; },
+      get mergedSinceLoad() { return mergedSinceLoad; },
+      get protectedKeys() { return [...protectedKeys]; },
+      protect: (keys) => keys.forEach((k) => protectedKeys.add(k)),
       load: () => serialize(load),
-      save: (data) => serialize(() => save(data)),
+      save: (data) => {
+        const base = { ...known };
+        return serialize(() => save(data, base));
+      },
     };
   };
 
@@ -748,6 +1012,8 @@ const TimesheetCore = (() => {
     addDays,
     startOfWeek,
     weekDates,
+    dayStartOffset,
+    shiftedNow,
     formatRange,
     formatDayHeading,
     formatDuration,
@@ -755,6 +1021,7 @@ const TimesheetCore = (() => {
     parseDuration,
     toDurationInput,
     coerceSettings,
+    resolveWeekStart,
     emptyLog,
     safeColor,
     mergeLiveTasks,
@@ -779,6 +1046,10 @@ const TimesheetCore = (() => {
     encodeState,
     decodeState,
     blobToData,
+    mergeStoredValue,
+    buildBackup,
+    parseBackup,
+    mergeLogs,
     createStore,
   };
 })();

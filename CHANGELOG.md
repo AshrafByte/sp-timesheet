@@ -10,14 +10,21 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - A day's time removed from a task in Super Productivity stayed in the timesheet.
 - Moving a manual entry to another date left a copy on the old date.
 - If loading saved data failed at startup, the next save replaced the stored history (manual entries, deleted tasks) with only the live tasks. Saving now waits for a successful load.
+- A deleted subtask's hours dropped out of totals once Super Productivity recomputed its parent.
+- Moving an entry onto a day it already had time on replaced that time; now the two are added.
 
 ### Changed
-- Storage is split into one key per month (on apps that support keyed storage), so a running timer rewrites one small key instead of the whole history. Saves only write keys that changed, and no longer read back every write.
+- Storage is split into one key per month (on apps that support keyed storage), so a running timer rewrites one small key instead of the whole history. A very busy month is split further to stay under the host's 256 KB limit per write. Saves only write keys that changed.
+- Saving no longer overwrites what another device saved: each month is read again before it's written and merged entry by entry when it changed. A device on its first run waits a minute before saving. Data from a newer version of the plugin is never overwritten, and edits that would land in it are refused.
+- Edits that failed to save are kept and saved before the next reload, instead of being replaced by it.
+- If many logged tasks disappear at once (the archive can come back empty after a load error), they're only marked deleted after a second check a minute later.
+- "Today" follows Super Productivity's *Start of next day* setting.
+- The view used last is remembered per device and no longer synced.
 - Rows of tasks that still exist in Super Productivity are read-only. Editing them used to be overwritten by the next refresh.
 - The plugin no longer has permission to delete tasks.
 - Debug output is off unless enabled in settings. The storage debug line is gone.
-- The released `index.html` has comments and whitespace removed, which keeps it under the 100 KB limit of older Super Productivity versions (75 KB now). The build refuses to produce anything larger.
-- Default first day of the week for new installs is Monday. Existing settings are kept.
+- The released `index.html` is minified, which keeps it under the 100 KB limit of older Super Productivity versions. The build refuses to produce anything larger. The build is reproducible, so the release can be checked against the source.
+- New installs follow Super Productivity's first day of the week. Existing settings are kept.
 - Super Productivity's built-in "Today" tag is no longer shown.
 
 ### Added
@@ -25,7 +32,9 @@ Rewrite of 1.x, with its saved data migrated automatically.
 - CSV export of the visible week, with filters applied.
 - "No project" filter. Tag filters also match subtasks.
 - Time format setting (`3h 45m` or `3.75h`) and a setting to hide subtask rows.
-- Week starting on Saturday.
+- Week start on any weekday, or following Super Productivity's setting.
+- Setting for which view opens: the one used last, Timesheet, or Insights.
+- Backup and restore (⚙ › Backup). Restoring only adds what's missing.
 - Keyboard access to rows, native dialogs (Esc closes them), progress bars announced to screen readers.
 
 ### Removed

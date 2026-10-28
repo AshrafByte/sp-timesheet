@@ -81,10 +81,11 @@ test('coerceSettings keeps valid values and replaces invalid ones', () => {
     showSubtasks: false,
     debugLogging: false,
     view: 'sheet',
+    defaultView: 'last',
     breakdownBy: 'project',
   });
-  const d = C.coerceSettings({ weekStartsOn: 3, dailyTargetHours: [1, 2], timeFormat: 'x' });
-  assert.equal(d.weekStartsOn, 1);
+  const d = C.coerceSettings({ weekStartsOn: 9, dailyTargetHours: [1, 2], timeFormat: 'x' });
+  assert.equal(d.weekStartsOn, 'app');
   assert.deepEqual(d.dailyTargetHours, [0, 8, 8, 8, 8, 8, 0]);
   assert.equal(d.timeFormat, 'hm');
 });

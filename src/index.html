@@ -112,14 +112,18 @@
 </main>
 
 <dialog class="ts-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
-  <form method="dialog" id="settingsForm">
+  <form method="dialog" id="settingsForm" novalidate>
     <h2 id="settingsTitle">Timesheet settings</h2>
     <label class="ts-field">
       <span class="ts-field-label">Week starts on</span>
-      <select id="weekStartSelect">
-        <option value="1">Monday</option>
-        <option value="0">Sunday</option>
-        <option value="6">Saturday</option>
+      <select id="weekStartSelect"><option value="app">Same as Super Productivity</option></select>
+    </label>
+    <label class="ts-field">
+      <span class="ts-field-label">Open on</span>
+      <select id="defaultViewSelect">
+        <option value="last">The view used last</option>
+        <option value="sheet">Timesheet</option>
+        <option value="chart">Insights</option>
       </select>
     </label>
     <fieldset class="ts-field">
@@ -141,6 +145,15 @@
       <input type="checkbox" id="debugLoggingInput" />
       <span>Debug logging in the developer console</span>
     </label>
+    <fieldset class="ts-field ts-backup">
+      <legend class="ts-field-label">Backup</legend>
+      <div class="ts-backup-actions">
+        <button type="button" class="ts-btn" id="backupBtn">Download backup</button>
+        <button type="button" class="ts-btn" id="restoreBtn">Restore from file…</button>
+        <input type="file" id="restoreInput" accept=".json,application/json" hidden />
+      </div>
+      <p class="ts-hint">Removing Timesheet from Super Productivity deletes its saved data on every synced device. To update, upload the new version over the installed one. Restoring adds missing entries and keeps the ones you have.</p>
+    </fieldset>
     <div class="ts-dialog-actions">
       <button type="button" class="ts-btn" data-close>Cancel</button>
       <button type="submit" class="ts-btn ts-btn-primary" value="save">Save</button>
@@ -149,7 +162,7 @@
 </dialog>
 
 <dialog class="ts-dialog" id="entryDialog" aria-labelledby="entryTitleHeading">
-  <form method="dialog" id="entryForm">
+  <form method="dialog" id="entryForm" novalidate>
     <h2 id="entryTitleHeading">Add entry</h2>
     <p class="ts-muted ts-dialog-sub" id="entrySub"></p>
     <label class="ts-field">

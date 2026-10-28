@@ -30,7 +30,10 @@
     loaded: false,
     settings: C.coerceSettings(),
     log: C.emptyLog(),
-    weekStart: C.startOfWeek(new Date(), C.DEFAULT_SETTINGS.weekStartsOn),
+    appFirstDay: null, // Super Productivity's first day of the week, once known
+    dayOffset: 0, // minutes after midnight that Super Productivity starts a new day
+    notice: '', // a lasting message under the header, e.g. about unreadable data
+    weekStart: C.startOfWeek(new Date(), 1),
     projects: [],
     projectsById: {},
     tags: [],
@@ -67,6 +70,29 @@
     return node;
   };
 
+  // "Now" and "today" by Super Productivity's day boundary, which can be later
+  // than midnight; time is booked to dates by that boundary.
+  const appNow = () => C.shiftedNow(state.dayOffset);
+  const todayStr = () => C.toDateStr(appNow());
+
+  // The view used last is remembered per device, not synced: another device
+  // switching views shouldn't switch this one.
+  const LAST_VIEW_KEY = 'sp-timesheet:last-view';
+  const readLastView = () => {
+    try {
+      return localStorage.getItem(LAST_VIEW_KEY);
+    } catch {
+      return null;
+    }
+  };
+  const writeLastView = (view) => {
+    try {
+      localStorage.setItem(LAST_VIEW_KEY, view);
+    } catch {
+      // a convenience only; without storage the view just isn't remembered
+    }
+  };
+
   const byTitle = (a, b) => String(a.title).localeCompare(String(b.title));
   const indexById = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
   const fmt = (ms) => C.formatDuration(ms, state.settings.timeFormat);
@@ -91,41 +117,72 @@
   let saveTimer = null;
   let saveDueAt = 0;
   let saveErrorShown = false;
+  // On a device's first run, automatic saves wait a minute so sync can
+  // deliver data saved on other devices first (edits still save at once).
+  let saveNotBefore = 0;
+  const FIRST_RUN_GRACE_MS = 60000;
 
   const scheduleSave = (delay = SAVE_DELAY_MS) => {
-    const due = Date.now() + delay;
+    const due = Math.max(Date.now() + delay, saveNotBefore);
     if (saveTimer && saveDueAt <= due) return;
     clearTimeout(saveTimer);
     saveDueAt = due;
-    saveTimer = setTimeout(saveNow, delay);
+    saveTimer = setTimeout(saveNow, due - Date.now());
   };
+
+  // The userRevision the last successful save included. While it's behind,
+  // memory holds edits storage doesn't have yet.
+  let savedRevision = 0;
 
   const saveNow = async () => {
     clearTimeout(saveTimer);
     saveTimer = null;
     if (!state.storageReady) return false;
+    const revision = state.userRevision;
     try {
       const written = await state.store.save(C.encodeState(state.settings, state.log));
       if (written) debug('saved', written, 'key(s)');
+      savedRevision = Math.max(savedRevision, revision);
       saveErrorShown = false;
+      // Storage held data this device hadn't seen and it was merged in; read
+      // it back so the next save starts from the merged version.
+      if (state.store.mergedSinceLoad) scheduleReload();
       return true;
     } catch (err) {
       reportError('saving failed', err);
       if (!saveErrorShown) {
         saveErrorShown = true;
-        snack('Timesheet could not save its data. It will keep retrying.', 'ERROR');
+        snack(/too large/.test(String(err && err.message))
+          ? 'Timesheet has more data than this version of Super Productivity can store. Update the app.'
+          : 'Timesheet could not save its data. It will keep retrying.', 'ERROR');
       }
       scheduleSave();
       return false;
     }
   };
 
+  const weekStartDay = () => C.resolveWeekStart(state.settings.weekStartsOn, state.appFirstDay);
+
+  // After the first day of the week changes: stay on "this week" if that's
+  // what was showing, otherwise show the week holding the old first day.
+  const realignWeek = (previousStartDay) => {
+    if (weekStartDay() === previousStartDay) return;
+    const wasCurrent = +state.weekStart === +C.startOfWeek(appNow(), previousStartDay);
+    state.weekStart = wasCurrent ? C.startOfWeek(appNow(), weekStartDay()) : C.startOfWeek(state.weekStart, weekStartDay());
+  };
+
   const applyStored = (data) => {
-    const previousWeekStart = state.settings.weekStartsOn;
-    ({ settings: state.settings, log: state.log } = C.decodeState(data));
-    if (state.settings.weekStartsOn !== previousWeekStart) {
-      state.weekStart = C.startOfWeek(state.weekStart, state.settings.weekStartsOn);
-    }
+    const previousStartDay = weekStartDay();
+    const view = state.settings.view; // per device; storage doesn't hold it
+    const { settings, log, unreadable } = C.decodeState(data);
+    state.settings = { ...settings, view };
+    state.log = log;
+    state.storedKeyCount = Object.keys(data).length;
+    realignWeek(previousStartDay);
+    state.store.protect(unreadable);
+    state.notice = unreadable.length || state.store.readOnly
+      ? 'Some saved Timesheet data comes from a newer version of the plugin. It is left untouched; update the plugin to see and edit it.'
+      : '';
     state.storageReady = true;
   };
 
@@ -152,6 +209,10 @@
   // changes synced from other devices. Re-reading our own write and saving it
   // back writes nothing (the store skips unchanged keys), so this can't loop.
   const reloadFromStorage = async () => {
+    // Edits that haven't reached storage (a save failed) would be replaced by
+    // the reload. Save them first, merging with storage; if that still fails,
+    // keep memory as it is and let the retry handle it.
+    if (state.storageReady && state.userRevision !== savedRevision && !(await saveNow())) return;
     const revision = state.userRevision;
     const wasReady = state.storageReady;
     if (!(await loadSaved())) return;
@@ -219,13 +280,31 @@
     return includeArchived && 'active' in ok && 'archived' in ok;
   };
 
+  // When many logged tasks vanish at once (the archive can come back empty
+  // after a load error), wait for a second complete fetch a minute later
+  // before marking them deleted.
+  const MASS_CONFIRM_MS = 60000;
+  let massHeldAt = 0;
+
   const mergeLive = (complete) => {
-    const tasks = [...(state.activeTasks || []), ...(state.archivedTasks || [])];
-    const { changed, missing } = C.mergeLiveTasks(state.log, tasks, {
+    // Active last: for a task restored from the archive, the cached archived
+    // copy is older and must not win.
+    const tasks = [...(state.archivedTasks || []), ...(state.activeTasks || [])];
+    const { changed, missing, held } = C.mergeLiveTasks(state.log, tasks, {
       projectsById: state.projectsById,
       tagsById: state.tagsById,
       complete,
+      allowMassDelete: complete && massHeldAt > 0 && Date.now() - massHeldAt >= MASS_CONFIRM_MS,
     });
+    if (complete) {
+      if (held.length && !massHeldAt) {
+        massHeldAt = Date.now();
+        debug(`${held.length} logged tasks are missing; checking again before marking them deleted`);
+        setTimeout(() => requestRefresh({ full: true }), MASS_CONFIRM_MS + 2000);
+      } else if (!held.length) {
+        massHeldAt = 0;
+      }
+    }
     if (changed) scheduleSave();
     // A logged task vanished since the last complete fetch: it was archived or
     // deleted, and only a complete fetch can tell which.
@@ -312,7 +391,7 @@
 
   // ---------- Rendering ----------
 
-  const currentWeekStart = () => C.startOfWeek(new Date(), state.settings.weekStartsOn);
+  const currentWeekStart = () => C.startOfWeek(appNow(), weekStartDay());
   const tagTitles = (entry) =>
     entry.tags.map((t) => t.title || (state.tagsById[t.id] && state.tagsById[t.id].title)).filter(Boolean);
 
@@ -390,7 +469,7 @@
   const dayCard = (day, dateStr, rows, total) => {
     const target = state.settings.dailyTargetHours[day.getDay()] || 0;
     const pct = target > 0 ? Math.min(100, (total / (target * C.HOUR_MS)) * 100) : total > 0 ? 100 : 0;
-    const isToday = dateStr === C.toDateStr(new Date());
+    const isToday = dateStr === todayStr();
     const collapsed = state.collapsed.has(dateStr);
     const heading = C.formatDayHeading(day);
 
@@ -467,20 +546,39 @@
     $('collapseAllBtn').textContent = dates.every((d) => state.collapsed.has(d)) ? 'Expand all' : 'Collapse all';
   };
 
+  // Rebuilding the day cards drops keyboard focus, so it's skipped when
+  // nothing shown changed (times are shown in whole minutes), and focus goes
+  // back to the same control when they are rebuilt.
+  let sheetKey = '';
+  const FOCUS_ATTRS = ['data-edit-id', 'data-edit-date', 'data-toggle-date', 'data-add-date'];
+  const focusSelector = (container) => {
+    const el = document.activeElement;
+    if (!el || !container.contains(el)) return null;
+    const parts = FOCUS_ATTRS.filter((a) => el.hasAttribute(a)).map((a) => `[${a}="${CSS.escape(el.getAttribute(a))}"]`);
+    return parts.length ? parts.join('') : null;
+  };
+
   const renderSheet = () => {
-    const days = C.weekDates(state.weekStart);
-    let weekTotal = 0;
-    let activeDays = 0;
-    const cards = days.map((day) => {
+    const min = (ms) => Math.round(ms / 60000);
+    const days = C.weekDates(state.weekStart).map((day) => {
       const dateStr = C.toDateStr(day);
       const rows = C.rowsForDay(state.log, dateStr, state.filter);
-      const total = C.sumCounted(rows);
-      weekTotal += total;
-      if (total > 0) activeDays++;
-      return dayCard(day, dateStr, rows, total);
+      return { day, dateStr, rows, total: C.sumCounted(rows) };
     });
-    $('daysContainer').replaceChildren(...cards);
-    renderSummary(days, weekTotal, activeDays);
+    const key = JSON.stringify([state.settings, state.filter, [...state.collapsed], todayStr(), filterSignature,
+      days.map((d) => d.rows.map((r) => [r.id, min(r.counted), r.entry.title, r.entry.projectTitle, r.entry.projectColor,
+        r.entry.isManual, r.entry.isDeleted, tagTitles(r.entry), r.children.map((c) => [c.id, min(c.ms), c.entry.title])]))]);
+    if (key === sheetKey) return;
+    sheetKey = key;
+
+    const container = $('daysContainer');
+    const refocus = focusSelector(container);
+    container.replaceChildren(...days.map((d) => dayCard(d.day, d.dateStr, d.rows, d.total)));
+    if (refocus) {
+      const target = container.querySelector(refocus);
+      if (target) target.focus({ preventScroll: true });
+    }
+    renderSummary(days.map((d) => d.day), days.reduce((sum, d) => sum + d.total, 0), days.filter((d) => d.total > 0).length);
     updateCollapseAllLabel();
   };
 
@@ -535,12 +633,12 @@
 
   // Top of the Insights card: the total, a bar toward the target (with a pace
   // marker for a week in progress), and for the whole week the stats around it.
-  const renderHero = (day, dayTarget, todayStr) => {
-    const progress = C.weekProgress(state.log, state.weekStart, state.filter, state.settings.dailyTargetHours);
+  const renderHero = (day, dayTarget, today) => {
+    const progress = C.weekProgress(state.log, state.weekStart, state.filter, state.settings.dailyTargetHours, appNow());
     const value = day ? day.total : progress.total;
     const target = day ? dayTarget : progress.target;
     const lastDay = day ? day.dateStr : C.toDateStr(C.addDays(state.weekStart, 6));
-    const over = lastDay < todayStr; // the day or week is finished
+    const over = lastDay < today; // the day or week is finished
     const showPace = !day && progress.pace > 0 && progress.pace < progress.target;
 
     $('heroLabel').textContent = day ? `${LONG_DAY_NAMES[day.date.getDay()]}, ${shortDate(day.date)}` : weekTitle();
@@ -578,7 +676,7 @@
         stats.push([progress.total >= progress.target ? 'Met' : fmt(progress.target - progress.total), 'Left to target']);
         stats.push([progress.daysWithTarget ? `${progress.daysOnTarget} of ${progress.daysWithTarget}` : '–', 'Days on target']);
       }
-      const cmp = C.compareWithPreviousWeek(state.log, state.weekStart, state.filter);
+      const cmp = C.compareWithPreviousWeek(state.log, state.weekStart, state.filter, appNow());
       if (cmp) {
         const period = cmp.days < 7 ? 'vs same days last week' : 'vs the week before';
         if (cmp.previous > 0) {
@@ -605,7 +703,7 @@
     if (!width) return; // hidden; drawn when shown
     const slots = C.assignProjectSlots(state.log);
     const week = C.weekChart(state.log, state.weekStart, state.filter, slots);
-    const todayStr = C.toDateStr(new Date());
+    const today = todayStr();
     const targets = week.map((d) => (state.settings.dailyTargetHours[d.date.getDay()] || 0) * C.HOUR_MS);
     if (!week.some((d) => d.dateStr === state.chartSelected)) state.chartSelected = null;
     const selected = week.findIndex((d) => d.dateStr === state.chartSelected);
@@ -623,16 +721,20 @@
     const trend = C.weekTotals(state.log, trendEnd, TREND_WEEKS, state.filter);
 
     // Redrawing every few seconds (a running timer) would restart hover and
-    // focus for nothing, so only redraw when something visible changed.
+    // focus for nothing, so only redraw when a shown value changed. Times
+    // are shown in whole minutes, so the key counts minutes.
     const animate = state.animateCharts && state.loaded;
-    const key = JSON.stringify([width, state.settings, filterSignature, todayStr, +state.weekStart, selected,
-      week.map((d) => d.segments), trend.map((t) => t.total), bd, state.breakdownExpanded, [...slots]]);
+    const min = (ms) => Math.round(ms / 60000);
+    const key = JSON.stringify([width, state.settings, filterSignature, today, +state.weekStart, selected,
+      week.map((d) => d.segments.map((s) => [s.key, min(s.ms)])), trend.map((t) => min(t.total)),
+      min(bd.total), bd.overlapping, bd.items.map((it) => [it.key, it.label, min(it.ms)]),
+      state.breakdownExpanded, [...slots]]);
     if (key === insightsKey && !animate) return;
     insightsKey = key;
     if (animate) state.animateCharts = false;
 
     const day = selected >= 0 ? week[selected] : null;
-    renderHero(day, day ? targets[selected] : 0, todayStr);
+    renderHero(day, day ? targets[selected] : 0, today);
 
     // Week chart
     const weekHost = $('weekChart');
@@ -641,7 +743,7 @@
     const capIndex = selected >= 0 ? selected : maxIndex;
     const weekTip = (i) => {
       const d = week[i];
-      const future = d.dateStr > todayStr;
+      const future = d.dateStr > today;
       return [
         h('div', { class: 'ts-tip-value', text: future ? 'Not yet' : fmt(d.total) }),
         h('div', { class: 'ts-tip-label', text: C.formatDayHeading(d.date) }),
@@ -664,8 +766,8 @@
         total: d.total,
         segments: d.segments.map((s) => ({ ...s, color: seriesColor(slots, s.key) })),
         target: targets[i],
-        strong: d.dateStr === todayStr,
-        muted: d.dateStr > todayStr,
+        strong: d.dateStr === today,
+        muted: d.dateStr > today,
         ariaLabel: `${C.formatDayHeading(d.date)}: ${fmt(d.total)}${targets[i] ? ` of ${fmt(targets[i])} target` : ''}`,
       })),
       onHover: (i, anchor) => {
@@ -677,7 +779,7 @@
           swiped = false;
           return;
         }
-        if (week[i].dateStr > todayStr) return;
+        if (week[i].dateStr > today) return;
         state.chartSelected = state.chartSelected === week[i].dateStr ? null : week[i].dateStr;
         state.breakdownExpanded = false;
         renderInsights();
@@ -802,7 +904,9 @@
   const render = () => {
     renderFilters();
     renderFilterButton();
-    $('rangeLabel').textContent = C.formatRange(state.weekStart);
+    // Only on change: the label is announced to screen readers.
+    const range = C.formatRange(state.weekStart);
+    if ($('rangeLabel').textContent !== range) $('rangeLabel').textContent = range;
     $('nextWeek').disabled = state.weekStart >= currentWeekStart();
     const chart = state.settings.view === 'chart';
     for (const tab of document.querySelectorAll('[data-view]')) {
@@ -812,7 +916,7 @@
     $('chartView').hidden = !chart;
     if (chart) renderInsights();
     else renderSheet();
-    $('statusLine').textContent = state.loaded ? '' : 'Loading…';
+    $('statusLine').textContent = state.loaded ? state.notice : 'Loading…';
   };
 
   const scrollToToday = () => {
@@ -828,7 +932,7 @@
     render();
   };
 
-  // View and breakdown choices: stored with the settings, without a message.
+  // The breakdown choice: stored with the settings, without a message.
   const setPreference = (key, value) => {
     if (state.settings[key] === value) return;
     state.settings = C.coerceSettings({ ...state.settings, [key]: value });
@@ -846,24 +950,35 @@
     snack(saved ? message : 'Saved here, but not stored yet. Timesheet will retry.', saved ? 'SUCCESS' : 'ERROR');
   };
 
+  // Data this version can't write (from a newer version of the plugin) can't
+  // take edits either: they would show here and then be lost.
+  const LOCKED_MESSAGE = 'This holds data from a newer version of Timesheet. Update the plugin to edit it.';
+  const isLocked = (key) => state.store.readOnly
+    || state.store.protectedKeys.some((k) => k === key || k.startsWith(`${key}~`));
+  const monthLocked = (date) => isLocked(`log-${String(date).slice(0, 7)}`);
+
   const ensureStorage = () => {
     if (state.storageReady) return true;
     snack('Timesheet is still loading its saved data. Try again in a moment.', 'ERROR');
     return false;
   };
 
-  let editing = null; // { id, date } while editing an existing entry
+  // While editing an existing entry: { id, date, ms, shown }. `shown` is the
+  // time as the field showed it, rounded to minutes; if it's left as is, the
+  // exact `ms` is kept.
+  let editing = null;
 
   const setEntryError = (message) => {
     $('entryError').textContent = message;
     $('entryError').hidden = !message;
   };
 
-  const openEntryDialog = ({ id = null, date = C.toDateStr(new Date()) } = {}) => {
+  const openEntryDialog = ({ id = null, date = todayStr() } = {}) => {
     if (!ensureStorage()) return;
     const entry = id ? state.log.entries[id] : null;
     if (id && !C.isEditable(entry)) return;
-    editing = entry ? { id, date } : null;
+    const ms = entry ? entry.byDate[date] || 0 : 0;
+    editing = entry ? { id, date, ms, shown: C.toDurationInput(ms) } : null;
     const titleEditable = !entry || entry.isManual;
 
     $('entryTitleHeading').textContent = entry ? 'Edit entry' : 'Add entry';
@@ -887,7 +1002,8 @@
     $('entryProject').value = (entry && entry.projectId) || '';
     $('entryProject').disabled = !titleEditable;
     $('entryDate').value = date;
-    $('entryDuration').value = entry ? C.toDurationInput(entry.byDate[date] || 0) : '';
+    $('entryDate').max = todayStr(); // a timesheet records what already happened
+    $('entryDuration').value = editing ? editing.shown : '';
     const deleteBtn = $('entryDeleteBtn');
     deleteBtn.hidden = !entry;
     deleteBtn.textContent = 'Delete';
@@ -900,14 +1016,20 @@
 
   const saveEntry = () => {
     const date = $('entryDate').value;
-    const ms = C.parseDuration($('entryDuration').value);
+    const typed = $('entryDuration').value.trim();
+    const ms = editing && typed === editing.shown && editing.ms > 0 ? editing.ms : C.parseDuration(typed);
     const title = $('entryTitle').value.trim();
     const projectId = $('entryProject').value || null;
     const project = projectId ? projectOptions().find((p) => p.id === projectId) : null;
     const fullProject = projectId ? state.projectsById[projectId] : null;
+    if (editing && !state.log.entries[editing.id]) {
+      return setEntryError('This entry changed while the dialog was open. Close it and open the entry again.');
+    }
     const isManual = !editing || state.log.entries[editing.id].isManual;
 
     if (!C.DATE_RE.test(date)) return setEntryError('Pick a date.');
+    if (date > todayStr()) return setEntryError('Pick today or an earlier date.');
+    if (monthLocked(date) || (editing && monthLocked(editing.date))) return setEntryError(LOCKED_MESSAGE);
     if (!(ms > 0) || ms > C.MAX_ENTRY_MS) return setEntryError('Enter a time between 1m and 24h, for example 2h35m.');
     if (isManual && !title) return setEntryError('Give the entry a title.');
 
@@ -933,6 +1055,10 @@
       btn.textContent = 'Click again to delete';
       return;
     }
+    if (editing && monthLocked(editing.date)) {
+      setEntryError(LOCKED_MESSAGE);
+      return;
+    }
     if (editing && C.removeEntryDay(state.log, editing.id, editing.date)) {
       $('entryDialog').close();
       commitUserChange('Entry deleted');
@@ -944,11 +1070,17 @@
   const openSettings = () => {
     if (!ensureStorage()) return;
     const s = state.settings;
+    const appDay = C.resolveWeekStart('app', state.appFirstDay);
+    $('weekStartSelect').replaceChildren(
+      h('option', { value: 'app', text: `Same as Super Productivity (${LONG_DAY_NAMES[appDay]})` }),
+      ...[1, 2, 3, 4, 5, 6, 0].map((day) => h('option', { value: String(day), text: LONG_DAY_NAMES[day] })),
+    );
     $('weekStartSelect').value = String(s.weekStartsOn);
+    $('defaultViewSelect').value = s.defaultView;
     $('timeFormatSelect').value = s.timeFormat;
     $('showSubtasksInput').checked = s.showSubtasks;
     $('debugLoggingInput').checked = s.debugLogging;
-    const order = Array.from({ length: 7 }, (_, i) => (s.weekStartsOn + i) % 7);
+    const order = Array.from({ length: 7 }, (_, i) => (weekStartDay() + i) % 7);
     $('targetsList').replaceChildren(...order.map((day) => h('label', { class: 'ts-target' },
       h('span', { text: C.DAY_NAMES[day] }),
       h('span', { class: 'ts-target-value' },
@@ -967,40 +1099,95 @@
   };
 
   const saveSettings = () => {
+    if (isLocked('settings')) {
+      snack(`Settings: ${LOCKED_MESSAGE}`, 'ERROR');
+      return;
+    }
     const targets = [...state.settings.dailyTargetHours];
     for (const input of $('targetsList').querySelectorAll('input')) {
       targets[Number(input.dataset.day)] = input.value === '' ? 0 : Number(input.value);
     }
+    const weekStart = $('weekStartSelect').value;
+    const previousStartDay = weekStartDay();
     state.settings = C.coerceSettings({
       ...state.settings,
-      weekStartsOn: Number($('weekStartSelect').value),
+      weekStartsOn: weekStart === 'app' ? 'app' : Number(weekStart),
+      defaultView: $('defaultViewSelect').value,
       dailyTargetHours: targets,
       timeFormat: $('timeFormatSelect').value,
       showSubtasks: $('showSubtasksInput').checked,
       debugLogging: $('debugLoggingInput').checked,
     });
-    state.weekStart = C.startOfWeek(state.weekStart, state.settings.weekStartsOn);
+    realignWeek(previousStartDay);
     $('settingsDialog').close();
     commitUserChange('Settings saved');
+  };
+
+  // ---------- Backup ----------
+
+  const downloadBackup = async () => {
+    if (!ensureStorage()) return;
+    const filename = `timesheet-backup-${C.toDateStr(new Date())}.json`;
+    const result = await requestDownload(filename, C.buildBackup(state.settings, state.log));
+    if (result.ok) snack(`Saved ${filename}`);
+    else {
+      reportError('backup failed', result.error);
+      snack('The backup could not be saved. The developer console has details.', 'ERROR');
+    }
+  };
+
+  // Restoring only adds: entries and days the timesheet doesn't have yet.
+  // Settings in the backup replace the current ones.
+  const restoreBackup = async (file) => {
+    if (!file || !ensureStorage()) return;
+    if (state.store.readOnly || state.store.protectedKeys.length) {
+      snack('Some saved data comes from a newer version of Timesheet. Update the plugin before restoring.', 'ERROR');
+      return;
+    }
+    let backup;
+    try {
+      backup = C.parseBackup(await file.text());
+    } catch (err) {
+      snack(err.message || 'That file could not be read.', 'ERROR');
+      return;
+    }
+    const added = C.mergeLogs(state.log, backup.log);
+    if (backup.hasSettings) {
+      const previousStartDay = weekStartDay();
+      state.settings = C.coerceSettings({ ...backup.settings, view: state.settings.view });
+      realignWeek(previousStartDay);
+    }
+    mergeLive(false); // Super Productivity's numbers stay on top for its tasks
+    $('settingsDialog').close();
+    const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    commitUserChange(`Backup restored: ${count(added.entries, 'entry', 'entries')} and ${count(added.days, 'day', 'days')} added${backup.hasSettings ? ', settings applied' : ''}`);
   };
 
   // ---------- Export ----------
 
   // The iframe is sandboxed without downloads, so plugin.js (which runs in the
-  // app itself) saves the file and answers with the result.
+  // app itself) saves the file. It acknowledges at once, then answers with the
+  // result, which can take as long as the app's save dialog stays open.
+  const SAVE_DIALOG_WAIT_MS = 10 * 60 * 1000;
   const requestDownload = (filename, data) => new Promise((resolve) => {
     const requestId = newManualId();
+    let timer = null;
     const finish = (result) => {
       clearTimeout(timer);
       window.removeEventListener('message', onMessage);
       resolve(result);
     };
+    const wait = (ms, error) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => finish({ ok: false, error }), ms);
+    };
     const onMessage = (event) => {
       const msg = event.data;
-      if (event.source !== window.parent || !msg || msg.type !== 'SP_TIMESHEET_DOWNLOAD_RESULT' || msg.requestId !== requestId) return;
-      finish({ ok: msg.ok === true, error: msg.error });
+      if (event.source !== window.parent || !msg || msg.requestId !== requestId) return;
+      if (msg.type === 'SP_TIMESHEET_DOWNLOAD_ACK') wait(SAVE_DIALOG_WAIT_MS, 'No result from plugin.js');
+      else if (msg.type === 'SP_TIMESHEET_DOWNLOAD_RESULT') finish({ ok: msg.ok === true, error: msg.error });
     };
-    const timer = setTimeout(() => finish({ ok: false, error: 'No answer from plugin.js' }), DOWNLOAD_TIMEOUT_MS);
+    wait(DOWNLOAD_TIMEOUT_MS, 'No answer from plugin.js');
     window.addEventListener('message', onMessage);
     window.parent.postMessage({ type: 'SP_TIMESHEET_DOWNLOAD', requestId, filename, data }, '*');
   });
@@ -1067,7 +1254,9 @@
 
     for (const tab of document.querySelectorAll('[data-view]')) {
       tab.addEventListener('click', () => {
-        setPreference('view', tab.dataset.view);
+        if (state.settings.view === tab.dataset.view) return;
+        state.settings.view = tab.dataset.view;
+        writeLastView(tab.dataset.view);
         state.animateCharts = true;
         render();
       });
@@ -1163,13 +1352,31 @@
       e.preventDefault();
       saveSettings();
     });
+    $('backupBtn').addEventListener('click', downloadBackup);
+    $('restoreBtn').addEventListener('click', () => $('restoreInput').click());
+    $('restoreInput').addEventListener('change', (e) => {
+      const [file] = e.target.files || [];
+      e.target.value = ''; // so choosing the same file again still fires
+      restoreBackup(file);
+    });
     for (const btn of document.querySelectorAll('[data-close]')) {
       btn.addEventListener('click', () => btn.closest('dialog').close());
     }
     for (const dialog of document.querySelectorAll('dialog')) {
-      // Clicking the backdrop closes the dialog.
+      // Close on a click on the backdrop: pressed and released outside the
+      // dialog's box. The padding inside the box is the dialog element too,
+      // and a text selection dragged out of a field ends outside it.
+      const outside = (e) => {
+        const r = dialog.getBoundingClientRect();
+        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      };
+      let pressedOutside = false;
+      dialog.addEventListener('pointerdown', (e) => {
+        pressedOutside = e.target === dialog && outside(e);
+      });
       dialog.addEventListener('click', (e) => {
-        if (e.target === dialog) dialog.close();
+        if (pressedOutside && e.target === dialog && outside(e)) dialog.close();
+        pressedOutside = false;
       });
     }
 
@@ -1194,6 +1401,43 @@
     check();
   });
 
+  const withTimeout = (promise, ms) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms)),
+  ]);
+
+  // From Super Productivity's settings: the first day of the week (Settings ›
+  // Language; on "System default", the locale's) and when a new day starts
+  // (Settings › Misc). getAppState sends the whole store, so this runs once
+  // per open, with a time limit.
+  const fetchAppSettings = async (api) => {
+    let locale = null;
+    let firstDay = null;
+    let dayOffset = 0;
+    try {
+      if (typeof api.getAppState === 'function') {
+        const appState = await withTimeout(Promise.resolve(api.getAppState()), 5000);
+        const config = (appState && appState.globalConfig) || {};
+        const localization = config.localization || {};
+        if (Number.isInteger(localization.firstDayOfWeek)) firstDay = localization.firstDayOfWeek;
+        if (typeof localization.dateTimeLocale === 'string') locale = localization.dateTimeLocale;
+        dayOffset = C.dayStartOffset(config.misc);
+      }
+    } catch (err) {
+      debug('could not read the app settings', err);
+    }
+    if (firstDay === null) {
+      try {
+        const info = new Intl.Locale(locale || navigator.language);
+        const week = typeof info.getWeekInfo === 'function' ? info.getWeekInfo() : info.weekInfo;
+        if (week && Number.isInteger(week.firstDay)) firstDay = week.firstDay % 7; // 7 = Sunday
+      } catch (err) {
+        debug('could not read the locale week', err);
+      }
+    }
+    return { firstDay, dayOffset };
+  };
+
   const boot = async (api) => {
     state.api = api;
     const dark = !(api.cfg && api.cfg.theme === 'light');
@@ -1203,7 +1447,12 @@
     state.store = C.createStore(api);
     debug('storage mode:', state.store.keyed ? 'keyed' : 'single blob');
 
-    await loadSaved();
+    const [, app] = await Promise.all([loadSaved(), fetchAppSettings(api)]);
+    state.appFirstDay = app.firstDay;
+    state.dayOffset = app.dayOffset;
+    const lastView = readLastView();
+    state.settings.view = state.settings.defaultView !== 'last' ? state.settings.defaultView
+      : lastView === 'chart' || lastView === 'sheet' ? lastView : 'sheet';
     state.weekStart = currentWeekStart();
     render();
 
@@ -1215,10 +1464,25 @@
     state.loaded = true;
     render();
     scrollToToday();
-    // Snapshot right away (this also lands a 1.x migration).
-    saveNow();
+    if (state.storageReady && !state.storedKeyCount) {
+      // First run on this device: give sync a minute to bring in data saved
+      // elsewhere before writing a snapshot.
+      saveNotBefore = Date.now() + FIRST_RUN_GRACE_MS;
+      scheduleSave(FIRST_RUN_GRACE_MS);
+    } else {
+      saveNow(); // snapshot right away (this also lands a 1.x migration)
+    }
 
-    setInterval(() => requestRefresh(), POLL_MS);
+    // A new day moves "today" and the pace, even if no data changed.
+    let renderedDay = todayStr();
+    setInterval(() => {
+      const today = todayStr();
+      if (today !== renderedDay) {
+        renderedDay = today;
+        render();
+      }
+      requestRefresh();
+    }, POLL_MS);
   };
 
   wireEvents();

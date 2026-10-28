@@ -6,6 +6,8 @@
  *   ?seed=v1       start from 1.x saved data
  *   ?reset=1       forget the mock's saved data
  *   ?timer=0       no running timer
+ *   ?firstDay=0..6 Super Productivity's first day of week (default: System default)
+ *   ?dayStart=HH:MM when Super Productivity starts a new day (default 00:00)
  * window.__mock exposes helpers for poking at it from the console.
  */
 (() => {
@@ -144,6 +146,15 @@
       return archivedFails ? Promise.reject(new Error('archive unavailable (mock)')) : later(archived, 60);
     },
     getAllProjects: () => later(projects),
+    // ?firstDay=0..6 sets Super Productivity's "First day of week"; otherwise
+    // it's on "System default" and Timesheet uses the locale.
+    getAppState: () => later({
+      tasks: {},
+      globalConfig: {
+        localization: { firstDayOfWeek: params.has('firstDay') ? Number(params.get('firstDay')) : null },
+        misc: { startOfNextDayTime: params.get('dayStart') || '00:00' }, // ?dayStart=04:00
+      },
+    }, 120),
     getAllTags: () => later(tags),
     registerHook: (hook, fn) => {
       (handlers[hook] = handlers[hook] || []).push(fn);
