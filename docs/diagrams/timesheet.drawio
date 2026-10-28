@@ -47,13 +47,10 @@
         </mxCell>
 
         <mxCell id="host" value="plugin.js · in the app window" style="swimlane;startSize=30;html=1;fontSize=14;fontStyle=1;fillColor=#fff2cc;strokeColor=#d6b656;rounded=1;arcSize=4;" vertex="1" parent="1">
-          <mxGeometry x="40" y="360" width="260" height="244" as="geometry" />
+          <mxGeometry x="40" y="360" width="260" height="144" as="geometry" />
         </mxCell>
         <mxCell id="bridge" value="File save bridge&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;checks the sender and the file name&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="host">
           <mxGeometry x="24" y="56" width="212" height="64" as="geometry" />
-        </mxCell>
-        <mxCell id="menu" value="Sidebar entry&lt;br&gt;&lt;font style=&quot;font-size: 12px;&quot;&gt;Timesheet in the main menu&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontSize=14;fillColor=#ffffff;strokeColor=#d6b656;" vertex="1" parent="host">
-          <mxGeometry x="24" y="160" width="212" height="60" as="geometry" />
         </mxCell>
 
         <mxCell id="view" value="Timesheet view · sandboxed iframe (index.html)" style="swimlane;startSize=30;html=1;fontSize=14;fontStyle=1;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;arcSize=4;" vertex="1" parent="1">
@@ -77,11 +74,7 @@
 
         <mxCell id="e-app-bridge" value="file" style="html=1;fontSize=12;strokeColor=#666666;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="app" target="bridge">
           <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="e-menu-view" value="opens" style="html=1;fontSize=12;strokeColor=#666666;exitX=1;exitY=0.5;entryX=0;entryY=0.7787;" edge="1" parent="1" source="menu" target="view">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-      </root>
+        </mxCell>      </root>
     </mxGraphModel>
   </diagram>
   <diagram id="saving" name="Saving">

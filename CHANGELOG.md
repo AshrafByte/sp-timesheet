@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+### Fixed
+- Super Productivity logged an error each time it loaded the plugin: the plugin added its own sidebar entry, so the one the app adds for it was rejected as a duplicate. The entry now comes from the app and shows the plugin's icon.
+
 ## 2.0.0
 
 Rewrite of 1.x, with its saved data migrated automatically.

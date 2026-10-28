@@ -1,6 +1,7 @@
 /*
- * Timesheet, host side. The UI lives in index.html. This file adds the
- * sidebar entry and saves files the view produces (CSV exports, JSON
+ * Timesheet, host side. The UI lives in index.html, and the app adds its
+ * sidebar entry (an iFrame plugin gets one named and iconed from the
+ * manifest). This file saves files the view produces (CSV exports, JSON
  * backups): the plugin iframe is sandboxed without downloads, so it posts the
  * file here and this code saves it from the app.
  */
@@ -8,12 +9,6 @@ const PLUGIN_ID = 'sp-timesheet';
 const MAX_EXPORT_CHARS = 20 * 1024 * 1024;
 const EXPORT_NAME_RE = /^[\w.-]{1,120}\.(csv|json)$/;
 const EXPORT_TYPES = { csv: 'text/csv;charset=utf-8', json: 'application/json' };
-
-PluginAPI.registerMenuEntry({
-  label: 'Timesheet',
-  icon: 'table_chart',
-  onClick: () => PluginAPI.showIndexHtmlAsView(),
-});
 
 // Super Productivity renders plugin views with srcdoc and tags each iframe
 // with data-plugin-id. The iframe is same-origin, so the sender's frameElement

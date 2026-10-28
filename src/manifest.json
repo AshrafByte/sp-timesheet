@@ -1,7 +1,7 @@
 {
   "id": "sp-timesheet",
   "name": "Timesheet",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A weekly timesheet of your tracked time with charts: days as columns by project, a 12-week trend, and breakdowns by project, tag or task. Daily targets, manual entries for work done outside the app, CSV export, and hours that stay on record after a task is deleted.",
   "manifestVersion": 1,
   "minSupVersion": "14.0.0",

@@ -49,6 +49,15 @@
   };
 </script>
 <script src="../dist/sp-timesheet/plugin.js"></script>
-<script>document.querySelector('#menu button').click();</script>
+<script>
+  // Like the app (plugin-runner.ts): an iFrame plugin gets a menu entry named
+  // after its manifest, added after plugin.js has run.
+  fetch('../dist/sp-timesheet/manifest.json').then((r) => r.json()).then((manifest) => {
+    if (manifest.iFrame && !manifest.isSkipMenuEntry && !manifest.sidePanel) {
+      PluginAPI.registerMenuEntry({ label: manifest.name, onClick: () => PluginAPI.showIndexHtmlAsView() });
+    }
+    document.querySelector('#menu button').click();
+  });
+</script>
 </body>
 </html>

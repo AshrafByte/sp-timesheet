@@ -168,7 +168,7 @@ The plugin also listens to app events (task changes, task deletion, finishing th
 
 The plugin has two parts, as Super Productivity runs them:
 
-- **`plugin.js`** runs in the app window. It adds the sidebar entry and saves files on the view's behalf, because a sandboxed iframe cannot start downloads. It accepts a save request only from Timesheet's own view and only for a `.csv` or `.json` file name.
+- **`plugin.js`** runs in the app window. It saves files on the view's behalf, because a sandboxed iframe cannot start downloads. It accepts a save request only from Timesheet's own view and only for a `.csv` or `.json` file name. The sidebar entry needs no code: the app adds one for an iFrame plugin, named and iconed from `manifest.json`.
 - **`index.html`** is the view, loaded in a sandboxed iframe. The build inlines the styles and three scripts into it:
   - `app.js` fetches tasks, listens for app events, schedules saves and renders both views and the dialogs.
   - `core.js` holds the logic, with no DOM or API access: dates and durations, the time log, totals, chart data, CSV, backups and the storage layer. It is what the tests cover.
