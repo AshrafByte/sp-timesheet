@@ -223,7 +223,7 @@ const TimesheetCharts = (() => {
    *
    * opts:
    *   size                outer diameter (px)
-   *   slices              [{ ms, color }]
+   *   slices              [{ ms, color, tint }], tint being the color's opacity
    *   center(i)           { value, label, note } for the middle; i = -1 for the whole
    *   ariaLabel           the chart in words
    *   onHover(i)          i = -1 when the pointer leaves
@@ -251,7 +251,7 @@ const TimesheetCharts = (() => {
         cy: mid,
         r,
         fill: 'none',
-        style: `stroke:${slice.color}`,
+        style: `stroke:${slice.color};stroke-opacity:${slice.tint}`,
         'stroke-width': thickness,
         'stroke-dasharray': `${len - gap} ${circumference}`,
         'stroke-dashoffset': -start,
@@ -299,16 +299,17 @@ const TimesheetCharts = (() => {
       if (opts.onHover) opts.onHover(hovered);
     };
 
-    // Mouse hover; on touch, a tap shows a slice and a second tap clears it.
+    // Mouse hover; on touch, a tap shows a slice, and tapping it again or the
+    // hole in the middle clears it.
     let lastPointer = '';
-    arcs.forEach((arc, i) => {
-      arc.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
-      arc.addEventListener('pointerenter', (e) => {
-        if (e.pointerType !== 'touch') hover(i);
-      });
-      arc.addEventListener('click', () => {
-        if (lastPointer === 'touch') hover(hovered === i ? -1 : i);
-      });
+    root.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
+    arcs.forEach((arc, i) => arc.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'touch') hover(i);
+    }));
+    root.addEventListener('click', (e) => {
+      if (lastPointer !== 'touch') return;
+      const i = arcs.indexOf(e.target);
+      hover(i === hovered ? -1 : i);
     });
     root.addEventListener('pointerleave', (e) => {
       if (e.pointerType !== 'touch') hover(-1);

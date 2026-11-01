@@ -867,10 +867,12 @@
     // counts toward both) and a single item is the whole, so those keep bars.
     const withDonut = by !== 'tag' && bd.items.length > 1;
     $('breakdownBody').classList.toggle('has-donut', withDonut);
+    $('breakdownBody').classList.toggle('is-long', withDonut && state.breakdownExpanded);
     $('breakdownList').classList.toggle('has-donut', withDonut);
     $('breakdownDonut').hidden = !withDonut;
     if (!withDonut) {
       donut = null;
+      hoverSlice(-1);
       $('breakdownDonut').replaceChildren();
     }
 
@@ -885,6 +887,7 @@
     const share = (ms) => (bd.total ? (ms / bd.total) * 100 : 0);
     const shareText = (ms) => (share(ms) > 0 && share(ms) < 1 ? '<1%' : `${Math.round(share(ms))}%`);
     const { own, otherMs, otherCount } = withDonut ? C.donutSlices(bd.items) : { own: bd.items.length, otherMs: 0, otherCount: 0 };
+    const tints = withDonut ? C.sliceTints(bd.items.slice(0, own).map(colorOf)) : [];
 
     const shown = state.breakdownExpanded ? bd.items : bd.items.slice(0, BREAKDOWN_LIMIT);
     const rows = [];
@@ -899,7 +902,7 @@
       const label = labelOf(item);
       rows.push(h('div', { class: 'ts-bd-row', dataset: withDonut ? { slice: Math.min(index, own) } : null },
         h('div', { class: 'ts-bd-name' },
-          by !== 'tag' && h('span', { class: 'ts-swatch', style: { background: color } }),
+          by !== 'tag' && h('span', { class: 'ts-swatch', style: { background: color, opacity: tints[index] ?? 1 } }),
           h('span', { class: 'ts-bd-label', text: label, title: label })),
         h('div', { class: 'ts-bd-time', text: fmt(item.ms) }),
         h('div', { class: 'ts-bd-pct', text: shareText(item.ms) }),
@@ -917,8 +920,8 @@
     $('breakdownList').replaceChildren(...rows);
     if (!withDonut) return;
 
-    const slices = bd.items.slice(0, own).map((item) => ({ ms: item.ms, color: colorOf(item), label: labelOf(item) }));
-    if (otherCount) slices.push({ ms: otherMs, color: 'var(--ts-series-other)', label: 'Other' });
+    const slices = bd.items.slice(0, own).map((item, i) => ({ ms: item.ms, color: colorOf(item), tint: tints[i], label: labelOf(item) }));
+    if (otherCount) slices.push({ ms: otherMs, color: 'var(--ts-series-other)', tint: 1, label: 'Other' });
     const [one, many] = by === 'task' ? ['task', 'tasks'] : ['project', 'projects'];
     const count = bd.items.length;
     donut = {
@@ -1255,6 +1258,10 @@
   });
 
   const exportCsv = async () => {
+    if (!state.loaded) {
+      snack('Timesheet is still loading. Try again in a moment.', 'ERROR');
+      return;
+    }
     const btn = $('exportBtn');
     const dates = C.weekDates(state.weekStart).map(C.toDateStr);
     const filename = `timesheet-${dates[0]}-to-${dates[6]}.csv`;
@@ -1515,7 +1522,7 @@
 
   const boot = async (api) => {
     state.api = api;
-    const dark = !(api.cfg && api.cfg.theme === 'light');
+    const dark = C.isDarkTheme(getComputedStyle(document.documentElement).getPropertyValue('--is-dark-theme'), api.cfg && api.cfg.theme);
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     // Chart colors have separate light and dark steps (styles.css).
     document.documentElement.classList.toggle('ts-dark', dark);

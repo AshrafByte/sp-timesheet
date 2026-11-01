@@ -9,6 +9,7 @@
  *   ?firstDay=0..6 Super Productivity's first day of week (default: System default)
  *   ?dayStart=HH:MM when Super Productivity starts a new day (default 00:00)
  *   ?demo=busy     the busy dataset from demo.js; ?shot=<state> sets up a screenshot
+ *   ?scenario=JSON { projects, tags, active, archived, stored, settings } instead
  * window.__mock exposes helpers for poking at it from the console.
  */
 (() => {
@@ -25,12 +26,12 @@
     dark: {
       '--bg': '#131418', '--bg-darker': 'rgba(255,255,255,0.05)', '--card-bg': '#1d1f25',
       '--text-color': '#e8e8ea', '--text-color-muted': '#9a9ba3', '--divider-color': 'rgba(255,255,255,0.1)',
-      '--c-primary': '#6495ed', '--c-warn': '#ef5350',
+      '--c-primary': '#6495ed', '--c-warn': '#ef5350', '--is-dark-theme': '1',
     },
     light: {
       '--bg': '#f5f6f8', '--bg-darker': 'rgba(0,0,0,0.04)', '--card-bg': '#ffffff',
       '--text-color': '#1f2329', '--text-color-muted': '#6b7280', '--divider-color': 'rgba(0,0,0,0.1)',
-      '--c-primary': '#3f6fd8', '--c-warn': '#d32f2f',
+      '--c-primary': '#3f6fd8', '--c-warn': '#d32f2f', '--is-dark-theme': '0',
     },
   };
   const theme = params.get('theme') === 'light' ? 'light' : 'dark';
@@ -106,8 +107,10 @@
   }
 
   // ?demo=busy: the realistic dataset from demo.js instead.
-  const demo = params.get('demo') === 'busy' && typeof TimesheetDemo !== 'undefined' ? TimesheetDemo.build({ dayStr }) : null;
-  if (demo) ({ projects, tags, active, archived } = demo);
+  // ?scenario=<JSON>: exactly the data a scripted check asks for.
+  const scenario = params.has('scenario') ? JSON.parse(params.get('scenario')) : null;
+  const demo = scenario || (params.get('demo') === 'busy' && typeof TimesheetDemo !== 'undefined' ? TimesheetDemo.build({ dayStr }) : null);
+  if (demo) ({ projects = [], tags = [], active = [], archived = [] } = demo);
 
   // ---------- Storage (persisted in localStorage so reloads keep it) ----------
   if (params.get('reset')) localStorage.removeItem(STORAGE_KEY);
@@ -127,7 +130,7 @@
   }
   if (demo && keyed && !Object.keys(saved.keys).length) {
     // What Timesheet itself would have stored: manual entries and a deleted task.
-    for (const [id, entry] of Object.entries(demo.stored)) {
+    for (const [id, entry] of Object.entries(demo.stored || {})) {
       for (const [date, ms] of Object.entries(entry.byDate)) {
         const key = `log-${date.slice(0, 7)}`;
         const shard = saved.keys[key] ? JSON.parse(saved.keys[key]) : { v: 2, entries: {} };
@@ -135,9 +138,9 @@
         saved.keys[key] = JSON.stringify(shard);
       }
     }
-    saved.keys.settings = JSON.stringify({ v: 2, weekStartsOn: 'app' });
+    saved.keys.settings = JSON.stringify({ v: 2, weekStartsOn: 'app', ...demo.settings });
   }
-  const persist = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  const persist =() => localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   const stats = { writes: [], loads: 0, lists: 0, getTasks: 0, getArchivedTasks: 0 };
 
   // ---------- Hooks ----------
@@ -155,7 +158,8 @@
   let archivedFails = false;
 
   const api = {
-    cfg: { theme, appVersion: '18.0.0-dev', platform: 'web' },
+    // Like the app: cfg.theme says light whatever the theme is.
+    cfg: { theme: 'light', appVersion: '18.0.0-dev', platform: 'web' },
     Hooks,
     getTasks: () => { stats.getTasks++; return later(active); },
     getArchivedTasks: () => {

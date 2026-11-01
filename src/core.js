@@ -71,6 +71,8 @@ const TimesheetCore = (() => {
 
   const formatDuration = (ms, format = 'hm') => {
     const totalMin = Math.round((ms || 0) / MINUTE_MS);
+    // A few seconds of tracked time round to nothing, but they aren't nothing.
+    if (ms > 0 && totalMin === 0) return format === 'decimal' ? '<0.01h' : '<1m';
     if (format === 'decimal') return `${(totalMin / 60).toFixed(2)}h`;
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
@@ -98,7 +100,14 @@ const TimesheetCore = (() => {
   };
 
   // Compact form for prefilling the duration field: "2h35m" / "1h" / "34m".
-  const toDurationInput = (ms) => formatDuration(ms).replace(' ', '');
+  const toDurationInput = (ms) => (ms > 0 && ms < MINUTE_MS / 2 ? '1m' : formatDuration(ms).replace(' ', ''));
+
+  // The app injects --is-dark-theme with its theme variables. cfg.theme can't
+  // be trusted (19.3.1 reports 'light' in dark mode), so it's only the fallback.
+  const isDarkTheme = (themeVar, cfgTheme) => {
+    const value = String(themeVar ?? '').trim();
+    return value ? value !== '0' : cfgTheme !== 'light';
+  };
 
   // ---------- Settings ----------
 
@@ -563,6 +572,18 @@ const TimesheetCore = (() => {
     const own = items.length > max ? max - 1 : items.length;
     const rest = items.slice(own);
     return { own, otherMs: rest.reduce((sum, item) => sum + item.ms, 0), otherCount: rest.length };
+  };
+
+  // Tasks take their project's color, so one project's tasks would form a
+  // single block: each further slice of a color gets a lighter tint of it.
+  const DONUT_TINTS = [1, 0.75, 0.58, 0.46, 0.38, 0.32];
+  const sliceTints = (colors) => {
+    const seen = new Map();
+    return colors.map((color) => {
+      const n = seen.get(color) || 0;
+      seen.set(color, n + 1);
+      return DONUT_TINTS[Math.min(n, DONUT_TINTS.length - 1)];
+    });
   };
 
   // Axis maximum and ticks on readable hour steps (0, 2h, 4h, 6h...), with at
@@ -1030,6 +1051,7 @@ const TimesheetCore = (() => {
     formatClock,
     parseDuration,
     toDurationInput,
+    isDarkTheme,
     coerceSettings,
     resolveWeekStart,
     emptyLog,
@@ -1052,6 +1074,7 @@ const TimesheetCore = (() => {
     weekProgress,
     breakdown,
     donutSlices,
+    sliceTints,
     hourScale,
     buildCsv,
     encodeState,

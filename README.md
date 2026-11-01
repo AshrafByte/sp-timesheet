@@ -200,11 +200,12 @@ npm run build   # write the plugin zip and listing entry to dist/
 npm run dev     # build, then serve on http://localhost:5178
 ```
 
-`npm run dev` serves three pages:
+`npm run dev` serves four pages:
 
 - `/dist/dev.html` runs the view against a mock plugin API with sample data and a running timer. `window.__mock` in the console can delete tasks, finish the day or simulate a sync from another device.
 - `/dist/dev-release.html` does the same with the minified release code.
 - `/dev/host.html` runs the built `plugin.js` in a stand-in app window, which covers CSV export and backups. Add `?release=1` for the release code.
+- `/dev/checks.html` runs scripted corner-case checks of the Insights breakdown (item counts, filters, hover and touch, hostile titles, phone width) and shows the result on the page. Add `?page=dev-release.html` to run them against the release code.
 
 The mock API accepts these query parameters:
 
@@ -217,6 +218,7 @@ The mock API accepts these query parameters:
 | `timer=0` | No running timer. |
 | `firstDay=0..6`, `dayStart=HH:MM` | The app's *First day of week* and *Start of next day*. |
 | `demo=busy` | The demo workload used for screenshots. |
+| `scenario=<JSON>` | Exactly the given `projects`, `tags`, `active`, `archived`, `stored` and `settings`, for scripted checks. |
 
 ### Screenshots and demo data
 

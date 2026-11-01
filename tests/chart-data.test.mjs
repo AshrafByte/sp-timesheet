@@ -160,6 +160,23 @@ test('donutSlices keeps at most six slices, the smallest items sharing the last'
   assert.deepEqual(C.donutSlices(items(9, 8, 7, 6, 5, 4, 3, 2, 1)), { own: 5, otherMs: 10 * H, otherCount: 4 });
 });
 
+test('donutSlices with one or two items keeps them all', () => {
+  const items = (...hours) => hours.map((h, i) => ({ key: `k${i}`, ms: h * H }));
+  assert.deepEqual(C.donutSlices(items(2)), { own: 1, otherMs: 0, otherCount: 0 });
+  assert.deepEqual(C.donutSlices(items(2, 1)), { own: 2, otherMs: 0, otherCount: 0 });
+});
+
+test('sliceTints separates slices that share a color and leaves the rest alone', () => {
+  assert.deepEqual(C.sliceTints([]), []);
+  assert.deepEqual(C.sliceTints(['a', 'b', 'c']), [1, 1, 1], 'different colors stay solid');
+  const same = C.sliceTints(['a', 'a', 'a', 'a', 'a', 'a']);
+  assert.equal(new Set(same).size, 6, 'six slices of one project are all distinct');
+  assert.equal(same[0], 1);
+  assert.ok(same.every((t, i) => i === 0 || t < same[i - 1]), 'each is lighter than the last');
+  assert.deepEqual(C.sliceTints(['a', 'b', 'a']).map((t) => t === 1), [true, true, false], 'counted per color');
+  assert.ok(C.sliceTints(Array(9).fill('a')).every((t) => t > 0), 'never fades out');
+});
+
 test('hourScale picks readable steps', () => {
   const hours = (scale) => ({ max: scale.max / H, ticks: scale.ticks.map((t) => t / H) });
   assert.deepEqual(hours(C.hourScale(0)), { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] });

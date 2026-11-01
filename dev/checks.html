@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Timesheet checks</title>
+<style>
+  /* Scripted corner-case checks of the Insights breakdown against the mock
+     API. Open it through npm run dev, add ?page=dev-release.html for the
+     release code, and read the result on the page (window.__report). */
+  body { margin: 0; font: 13px monospace; background: #111; color: #ddd; }
+  iframe { position: fixed; left: 0; top: 0; border: 0; visibility: hidden; }
+</style>
+</head>
+<body>
+<pre id="out">running…</pre>
+<script>
+  const q = new URLSearchParams(location.search);
+  const page = q.get('page') || 'dev.html';
+  const only = q.get('only');
+  const results = [];
+  const H = 3600000;
+  const M = 60000;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const until = async (test, what, ms = 12000) => {
+    const start = Date.now();
+    while (!test()) {
+      if (Date.now() - start > ms) throw new Error(`timed out: ${what}`);
+      await sleep(25);
+    }
+  };
+  const monday = (() => {
+    const t = new Date();
+    t.setHours(12, 0, 0, 0);
+    t.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+    return t;
+  })();
+  const d = (o) => {
+    const x = new Date(monday);
+    x.setDate(x.getDate() + o);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  const task = (id, title, projectId, byDay, extra = {}) => ({
+    id, title, projectId, tagIds: [], subTaskIds: [], parentId: null, isDone: false, timeSpentOnDay: byDay, ...extra,
+  });
+  const project = (id, title) => ({ id, title, theme: { primary: '#3b82f6' } });
+  // n projects, one task each, largest first.
+  const perProject = (n) => ({
+    projects: Array.from({ length: n }, (_, i) => project(`p${i}`, `Project ${i}`)),
+    active: Array.from({ length: n }, (_, i) => task(`t${i}`, `Task ${i}`, `p${i}`, { [d(0)]: (n - i) * 30 * M })),
+  });
+
+  let frame = null;
+  const open = async (scenario, { w = 1100, h = 900, theme = 'dark', extra = '', view = 'chart' } = {}) => {
+    if (frame) frame.remove();
+    frame = document.createElement('iframe');
+    frame.style.width = `${w}px`;
+    frame.style.height = `${h}px`;
+    frame.src = `../dist/${page}?reset=1&timer=0&firstDay=1&theme=${theme}${extra}&scenario=${encodeURIComponent(JSON.stringify(scenario))}`;
+    document.body.append(frame);
+    await until(() => frame.contentDocument && frame.contentDocument.getElementById('breakdownList') && frame.contentWindow.__mock, 'page');
+    const doc = frame.contentDocument;
+    await until(() => doc.getElementById('statusLine').textContent === '' && doc.querySelector('.ts-day'), 'loaded');
+    const win = frame.contentWindow;
+    if (view === 'chart') {
+      click(doc, '[data-view="chart"]');
+      await until(() => !doc.getElementById('chartView').hidden, 'insights');
+      await sleep(60);
+    }
+    return { win, doc };
+  };
+  const click = (doc, selector) => {
+    const el = typeof selector === 'string' ? doc.querySelector(selector) : selector;
+    el.dispatchEvent(new (doc.defaultView.MouseEvent)('click', { bubbles: true }));
+  };
+  const by = async (doc, name) => { click(doc, `[data-by="${name}"]`); await sleep(40); };
+  const read = (doc) => {
+    const list = doc.getElementById('breakdownList');
+    const host = doc.getElementById('breakdownDonut');
+    return {
+      donut: !host.hidden,
+      cls: doc.getElementById('breakdownBody').classList.contains('has-donut'),
+      slices: host.querySelectorAll('.ts-slice').length,
+      rows: list.querySelectorAll('.ts-bd-row').length,
+      bars: list.querySelectorAll('.ts-bd-track').length,
+      group: (list.querySelector('.ts-bd-group') || { textContent: '' }).textContent,
+      more: (list.querySelector('.ts-bd-more') || { textContent: '' }).textContent,
+      center: [...host.querySelectorAll('.ts-donut-center > div')].filter((e) => !e.hidden).map((e) => e.textContent).join(' | '),
+      empty: /No time tracked/.test(list.textContent),
+      linking: list.classList.contains('is-linking'),
+      linked: [...list.querySelectorAll('.is-linked .ts-bd-label')].map((e) => e.textContent),
+      hoverArc: host.querySelectorAll('.ts-slice.is-hover').length,
+    };
+  };
+  const pe = (doc, type, opts) => new (doc.defaultView.PointerEvent)(type, { pointerType: 'mouse', ...opts });
+  const slice = (doc, i) => doc.querySelectorAll('.ts-slice')[i];
+  const enter = (doc, i) => slice(doc, i).dispatchEvent(pe(doc, 'pointerenter'));
+  const leave = (doc) => doc.querySelector('#breakdownDonut svg').dispatchEvent(pe(doc, 'pointerleave'));
+  const tap = (doc, el) => {
+    el.dispatchEvent(pe(doc, 'pointerdown', { pointerType: 'touch', bubbles: true }));
+    el.dispatchEvent(new (doc.defaultView.MouseEvent)('click', { bubbles: true }));
+  };
+  const noOverflow = ({ win, doc }) => doc.documentElement.scrollWidth <= win.innerWidth;
+  const eq = (name, actual, expected) => results.push({ name, ok: JSON.stringify(actual) === JSON.stringify(expected), actual, expected });
+  const ok = (name, cond, actual) => results.push({ name, ok: !!cond, actual });
+
+  const checks = {
+    async 'no time at all'() {
+      const { doc } = await open({ projects: [project('p', 'P')] });
+      const a = read(doc);
+      eq('empty: no donut', [a.donut, a.cls, a.empty], [false, false, true]);
+      await by(doc, 'task');
+      eq('empty tasks: no donut', [read(doc).donut, read(doc).empty], [false, true]);
+      await by(doc, 'tag');
+      eq('empty tags: no donut', [read(doc).donut, read(doc).empty], [false, true]);
+    },
+    async 'one item keeps a bar'() {
+      const { doc } = await open({ projects: [project('p', 'P')], active: [task('a', 'Only', 'p', { [d(0)]: H })] });
+      const a = read(doc);
+      eq('one project: bar, no donut', [a.donut, a.bars, a.rows], [false, 1, 1]);
+      await by(doc, 'task');
+      eq('one task: bar, no donut', [read(doc).donut, read(doc).bars], [false, 1]);
+    },
+    async 'two tasks in one project'() {
+      const { doc } = await open({ projects: [project('p', 'P')], active: [task('a', 'A', 'p', { [d(0)]: H }), task('b', 'B', 'p', { [d(1)]: H })] });
+      eq('project tab: one item, bar', read(doc).donut, false);
+      await by(doc, 'task');
+      const a = read(doc);
+      eq('task tab: two slices, no bars', [a.donut, a.slices, a.bars, a.center], [true, 2, 0, '2h | 2 tasks']);
+    },
+    async 'six items fit, seven fold'() {
+      let a = read((await open(perProject(6))).doc);
+      eq('six: six slices, no Other', [a.slices, a.rows, a.group], [6, 6, '']);
+      a = read((await open(perProject(7))).doc);
+      eq('seven: 5 + Other', [a.slices, a.rows, a.group.replace(/\s+/g, ' ')], [6, 7, 'Other · 2 more · 11%']);
+    },
+    async 'more than the list limit'() {
+      const { doc } = await open(perProject(9));
+      let a = read(doc);
+      eq('nine: 8 rows, Show 1 more', [a.slices, a.rows, a.more], [6, 8, 'Show 1 more']);
+      click(doc, '[data-action="toggle-breakdown"]');
+      await sleep(40);
+      a = read(doc);
+      eq('expanded: all rows, Show fewer', [a.slices, a.rows, a.more], [6, 9, 'Show fewer']);
+    },
+    async 'long list keeps the donut in view'() {
+      const n = 40;
+      const s = {
+        projects: [project('p', 'P')],
+        active: Array.from({ length: n }, (_, i) => task(`t${i}`, `Task ${i}`, 'p', { [d(0)]: (n - i) * 5 * M })),
+      };
+      const { doc } = await open(s);
+      await by(doc, 'task');
+      click(doc, '[data-action="toggle-breakdown"]');
+      await sleep(60);
+      const body = doc.getElementById('breakdownBody').getBoundingClientRect();
+      const donut = doc.querySelector('.ts-donut').getBoundingClientRect();
+      ok('expanded: donut near the top of the list', donut.top - body.top < 60, Math.round(donut.top - body.top));
+      const scroller = doc.scrollingElement;
+      scroller.scrollTop = 900;
+      await sleep(60);
+      const stuck = doc.querySelector('.ts-donut').getBoundingClientRect();
+      ok('scrolled: donut stays on screen', scroller.scrollTop > 500 && stuck.top >= 0 && stuck.bottom <= doc.defaultView.innerHeight, [scroller.scrollTop, Math.round(stuck.top)]);
+      scroller.scrollTop = 0;
+      click(doc, '[data-action="toggle-breakdown"]');
+      await sleep(60);
+      ok('collapsed again: no longer sticky', !doc.getElementById('breakdownBody').classList.contains('is-long'));
+    },
+    async 'one project on the Tasks tab'() {
+      const { doc, win } = await open({
+        projects: [project('p', 'Only project')],
+        active: Array.from({ length: 8 }, (_, i) => task(`t${i}`, `Task ${i}`, 'p', { [d(0)]: (8 - i) * 30 * M })),
+      });
+      await by(doc, 'task');
+      const tints = [...doc.querySelectorAll('.ts-slice')].slice(0, 5).map((e) => win.getComputedStyle(e).strokeOpacity);
+      eq('own slices all differ', new Set(tints).size, 5);
+      const swatches = [...doc.querySelectorAll('.ts-bd-row .ts-swatch')].map((e) => win.getComputedStyle(e).opacity);
+      eq('swatch tints match their slices', swatches.slice(0, 5), tints);
+      eq('rows under Other stay solid', swatches.slice(5), ['1', '1', '1']);
+      eq('Other slice stays solid', win.getComputedStyle(doc.querySelectorAll('.ts-slice')[5]).strokeOpacity, '1');
+    },
+    async 'different projects stay solid'() {
+      const { doc, win } = await open(perProject(5));
+      const tints = [...doc.querySelectorAll('.ts-slice')].map((e) => win.getComputedStyle(e).strokeOpacity);
+      eq('no tints between projects', tints, ['1', '1', '1', '1', '1']);
+    },
+    async 'more than eight projects'() {
+      const { doc } = await open(perProject(12));
+      const a = read(doc);
+      eq('twelve: 6 slices, 8 rows', [a.slices, a.rows], [6, 8]);
+      const strokes = [...doc.querySelectorAll('.ts-slice')].map((e) => doc.defaultView.getComputedStyle(e).stroke);
+      ok('all slices have a resolved color', strokes.every((c) => c && c !== 'none'), strokes);
+    },
+    async 'tiny slice'() {
+      const { doc } = await open({
+        projects: [project('a', 'Big'), project('b', 'Tiny')],
+        active: [task('a', 'Big', 'a', { [d(0)]: 60 * H }), task('b', 'Tiny', 'b', { [d(0)]: M })],
+      });
+      const a = read(doc);
+      eq('tiny: drawn, <1%', [a.slices, doc.querySelectorAll('.ts-bd-pct')[1].textContent], [2, '<1%']);
+      const dash = doc.querySelectorAll('.ts-slice')[1].getAttribute('stroke-dasharray').split(' ')[0];
+      ok('tiny: valid dash', Number(dash) > 0 && Number.isFinite(Number(dash)), dash);
+    },
+    async 'hostile titles stay text'() {
+      const evil = '<img src=x onerror="window.__xss=1"><b>x</b>';
+      const { doc, win } = await open({
+        projects: [project('p', evil), project('q', 'Q')],
+        active: [task('a', evil, 'p', { [d(0)]: 2 * H }), task('b', '"><script>window.__xss=2<\/script>', 'q', { [d(0)]: H })],
+      });
+      await by(doc, 'task');
+      enter(doc, 0);
+      await sleep(30);
+      const card = doc.getElementById('breakdownBody');
+      eq('no markup created', [card.querySelectorAll('img, b:not(.ts-bd-group b), script').length, win.__xss], [0, undefined]);
+      ok('title shown literally', doc.querySelector('.ts-donut-label').textContent.includes('<img'), doc.querySelector('.ts-donut-label').textContent);
+      ok('aria-label literal', doc.querySelector('.ts-donut').getAttribute('aria-label').includes('<img'));
+    },
+    async 'very long title'() {
+      const long = 'A very long task title that keeps going '.repeat(8).trim();
+      const v = await open({ projects: [project('p', 'P')], active: [task('a', long, 'p', { [d(0)]: 2 * H }), task('b', 'Short', 'p', { [d(0)]: H })] });
+      await by(v.doc, 'task');
+      enter(v.doc, 0);
+      await sleep(30);
+      const c = v.doc.querySelector('.ts-donut-center');
+      const inner = [...c.children].filter((e) => !e.hidden).reduce((s, e) => s + e.getBoundingClientRect().height, 0);
+      ok('center text fits the hole', inner <= 130, Math.round(inner));
+      const lab = v.doc.querySelector('.ts-donut-label');
+      ok('label is clamped', lab.getBoundingClientRect().height < 45, Math.round(lab.getBoundingClientRect().height));
+      ok('no sideways scroll', noOverflow(v), v.doc.documentElement.scrollWidth);
+    },
+    async 'decimal time format'() {
+      const { doc } = await open({ ...perProject(3), settings: { timeFormat: 'decimal' } });
+      eq('center uses decimals', read(doc).center, '3.00h | 3 projects');
+      enter(doc, 0);
+      await sleep(20);
+      eq('hover uses decimals', read(doc).center, '1.50h | Project 0 | 50%');
+    },
+    async 'a selected day'() {
+      const { doc } = await open({
+        projects: [project('a', 'A'), project('b', 'B'), project('c', 'C')],
+        active: [
+          task('m1', 'Mon A', 'a', { [d(0)]: 2 * H }), task('m2', 'Mon B', 'b', { [d(0)]: H }),
+          task('t1', 'Tue C', 'c', { [d(1)]: H }),
+        ],
+      });
+      const hits = () => [...doc.querySelectorAll('#weekChart .ts-hit')];
+      click(doc, hits()[1]);
+      await sleep(60);
+      eq('one-item day: bar', [read(doc).donut, read(doc).rows], [false, 1]);
+      click(doc, hits()[0]);
+      await sleep(60);
+      eq('two-item day: donut of that day', [read(doc).donut, read(doc).center], [true, '3h | 2 projects']);
+      click(doc, hits()[2]);
+      await sleep(60);
+      eq('empty day: message, no donut', [read(doc).donut, read(doc).empty], [false, true]);
+      click(doc, '#showWeekBtn');
+      await sleep(60);
+      eq('whole week again', [read(doc).donut, read(doc).center], [true, '4h | 3 projects']);
+    },
+    async 'filters'() {
+      const { doc } = await open({
+        projects: [project('a', 'A'), project('b', 'B')],
+        tags: [{ id: 'x', title: 'X' }, { id: 'y', title: 'Y' }],
+        active: [
+          task('1', 'One', 'a', { [d(0)]: 2 * H }, { tagIds: ['x', 'y'] }),
+          task('2', 'Two', 'a', { [d(0)]: H }, { tagIds: ['x'] }),
+          task('3', 'Three', 'b', { [d(0)]: H }),
+        ],
+      });
+      const set = async (id, value) => {
+        const el = doc.getElementById(id);
+        el.value = value;
+        el.dispatchEvent(new (doc.defaultView.Event)('change', { bubbles: true }));
+        await sleep(60);
+      };
+      await set('projectFilter', 'a');
+      eq('project filter: one project, bar', read(doc).donut, false);
+      await by(doc, 'task');
+      eq('project filter on tasks: donut', [read(doc).donut, read(doc).slices, read(doc).center], [true, 2, '3h | 2 tasks']);
+      await by(doc, 'tag');
+      const a = read(doc);
+      eq('tags never get a donut', [a.donut, a.slices, a.bars > 0, doc.getElementById('breakdownNote').hidden], [false, 0, true, false]);
+      await by(doc, 'project');
+      await set('projectFilter', 'all');
+      await set('tagFilter', 'y');
+      eq('tag filter: one project left, bar', [read(doc).donut, read(doc).rows], [false, 1]);
+    },
+    async 'hover links slices and rows'() {
+      const { doc } = await open(perProject(7));
+      enter(doc, 1);
+      await sleep(20);
+      let a = read(doc);
+      eq('slice to row', [a.linked, a.center, a.hoverArc, a.linking], [['Project 1'], '3h | Project 1 | 21%', 1, true]);
+      leave(doc);
+      await sleep(20);
+      a = read(doc);
+      eq('leaving clears', [a.linked, a.hoverArc, a.linking, a.center], [[], 0, false, '14h | 7 projects']);
+      enter(doc, 5);
+      await sleep(20);
+      a = read(doc);
+      eq('Other slice lights all its rows', a.linked, ['Project 5', 'Project 6']);
+      leave(doc);
+      const rows = doc.querySelectorAll('#breakdownList [data-slice]');
+      rows[6].dispatchEvent(pe(doc, 'pointerover', { bubbles: true })); // heading is index 5
+      await sleep(20);
+      a = read(doc);
+      eq('row in Other lights the Other slice', [a.hoverArc, a.center], [1, '1.5h | Other | 11%'.replace('1.5h', '1h 30m')]);
+      doc.getElementById('breakdownList').dispatchEvent(pe(doc, 'pointerleave'));
+      await sleep(20);
+      eq('leaving the list clears', [read(doc).hoverArc, read(doc).linking], [0, false]);
+    },
+    async 'touch'() {
+      const { doc } = await open(perProject(3));
+      tap(doc, slice(doc, 0));
+      await sleep(20);
+      eq('tap shows a slice', read(doc).hoverArc, 1);
+      tap(doc, slice(doc, 1));
+      await sleep(20);
+      eq('tap another moves it', read(doc).linked, ['Project 1']);
+      tap(doc, slice(doc, 1));
+      await sleep(20);
+      eq('second tap clears', [read(doc).hoverArc, read(doc).linking], [0, false]);
+      tap(doc, slice(doc, 2));
+      await sleep(20);
+      tap(doc, doc.querySelector('#breakdownDonut svg'));
+      await sleep(20);
+      eq('tap in the hole clears', read(doc).hoverArc, 0);
+      const row = doc.querySelector('#breakdownList [data-slice]');
+      row.dispatchEvent(pe(doc, 'pointerover', { pointerType: 'touch', bubbles: true }));
+      await sleep(20);
+      eq('touch on a row does nothing', read(doc).hoverArc, 0);
+    },
+    async 'hover survives a redraw, not a tab change'() {
+      const { doc, win } = await open(perProject(3));
+      enter(doc, 1);
+      await sleep(20);
+      win.__mock.active[1].timeSpentOnDay[d(0)] += 30 * M;
+      win.__mock.deleteTask('no-such-task');
+      await until(() => /^2h 30m/.test(read(doc).center) || /^2h/.test(read(doc).center) && read(doc).hoverArc === 0, 'redraw', 9000).catch(() => {});
+      await sleep(5200);
+      const a = read(doc);
+      eq('redraw keeps the hovered slice', [a.hoverArc, a.linked, a.center.split(' | ')[1]], [1, ['Project 1'], 'Project 1']);
+      await by(doc, 'tag');
+      await by(doc, 'project');
+      const b = read(doc);
+      eq('no stale hover after Tags and back', [b.hoverArc, b.linking], [0, false]);
+    },
+    async 'switching views and weeks'() {
+      const { doc } = await open(perProject(3));
+      click(doc, '[data-view="sheet"]');
+      await sleep(40);
+      click(doc, '#prevWeek');
+      await sleep(40);
+      click(doc, '[data-view="chart"]');
+      await sleep(60);
+      eq('empty previous week', [read(doc).donut, read(doc).empty], [false, true]);
+      click(doc, '#nextWeek');
+      await sleep(60);
+      eq('back to the week with time', [read(doc).donut, read(doc).slices], [true, 3]);
+    },
+    async 'saved tab is restored'() {
+      const { doc } = await open({ ...perProject(3), settings: { breakdownBy: 'task' } });
+      eq('opens on Tasks with a donut', [doc.querySelector('[data-by="task"]').getAttribute('aria-checked'), read(doc).center], ['true', '3h | 3 tasks']);
+    },
+    async 'old host storage'() {
+      const { doc } = await open(perProject(3), { extra: '&host=old' });
+      eq('single-entry storage: donut drawn', read(doc).slices, 3);
+    },
+    async 'theme comes from the app variable'() {
+      let { doc } = await open(perProject(3), { theme: 'light' });
+      const c = doc.defaultView.getComputedStyle(slice(doc, 0)).stroke;
+      eq('light: light palette', [doc.documentElement.classList.contains('ts-dark'), c], [false, 'rgb(42, 120, 214)']);
+      eq('light: color-scheme', doc.documentElement.style.colorScheme, 'light');
+      ({ doc } = await open(perProject(3), { theme: 'dark' }));
+      const c2 = doc.defaultView.getComputedStyle(slice(doc, 0)).stroke;
+      eq('dark: dark palette', [doc.documentElement.classList.contains('ts-dark'), c2], [true, 'rgb(57, 135, 229)']);
+      eq('dark: color-scheme', doc.documentElement.style.colorScheme, 'dark');
+    },
+    async 'seconds of tracked time'() {
+      const { doc } = await open({
+        projects: [project('a', 'A'), project('b', 'B')],
+        active: [task('a', 'Hour', 'a', { [d(0)]: H }), task('b', 'Accidental', 'b', { [d(0)]: 6000 })],
+      });
+      await by(doc, 'task');
+      eq('list shows <1m', doc.querySelectorAll('.ts-bd-time')[1].textContent, '<1m');
+      click(doc, '[data-view="sheet"]');
+      await sleep(60);
+      const times = [...doc.querySelectorAll('.ts-row:not(.ts-row-head) .ts-time')].map((e) => e.textContent);
+      ok('Timesheet row shows <1m', times.includes('<1m'), times);
+    },
+    async 'phone width'() {
+      const s = {
+        projects: [project('p', 'A project with a rather long name here'), project('q', 'Q')],
+        active: [task('a', 'A long task title that should not push the layout sideways at all', 'p', { [d(0)]: 2 * H }), task('b', 'B', 'q', { [d(0)]: H })],
+      };
+      const v = await open(s, { w: 360, h: 800 });
+      const donut = v.doc.querySelector('.ts-donut').getBoundingClientRect();
+      const list = v.doc.getElementById('breakdownList').getBoundingClientRect();
+      ok('stacked: donut above the list', donut.bottom <= list.top + 1, [donut.bottom, list.top]);
+      ok('donut centered', Math.abs((donut.left + donut.right) / 2 - (list.left + list.right) / 2) < 2);
+      ok('no sideways scroll', noOverflow(v), v.doc.documentElement.scrollWidth);
+    },
+    async 'narrow desktop widths'() {
+      for (const w of [641, 700, 820]) {
+        const v = await open(perProject(9), { w });
+        ok(`${w}px: two columns`, v.doc.getElementById('breakdownList').getBoundingClientRect().left > v.doc.querySelector('.ts-donut').getBoundingClientRect().right, w);
+        ok(`${w}px: no sideways scroll`, noOverflow(v), v.doc.documentElement.scrollWidth);
+      }
+    },
+  };
+
+  (async () => {
+    for (const [name, run] of Object.entries(checks)) {
+      if (only && !name.includes(only)) continue;
+      try {
+        await run();
+      } catch (err) {
+        results.push({ name: `${name}: threw`, ok: false, actual: String(err && err.stack || err) });
+      }
+    }
+    const failed = results.filter((r) => !r.ok);
+    window.__report = { page, total: results.length, passed: results.length - failed.length, failed };
+    document.getElementById('out').textContent = JSON.stringify(window.__report, null, 1);
+    document.documentElement.dataset.done = '1';
+    if (frame) frame.remove();
+  })();
+</script>
+</body>
+</html>

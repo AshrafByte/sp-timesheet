@@ -63,6 +63,30 @@ test('formatDuration and toDurationInput', () => {
   assert.equal(C.formatClock(65 * M), '1:05');
 });
 
+test('seconds of tracked time do not read as nothing', () => {
+  assert.equal(C.formatDuration(6000), '<1m');
+  assert.equal(C.formatDuration(6000, 'decimal'), '<0.01h');
+  assert.equal(C.formatDuration(29999), '<1m');
+  assert.equal(C.formatDuration(30000), '1m', 'half a minute rounds up as before');
+  assert.equal(C.formatDuration(0), '0h', 'nothing is still nothing');
+  assert.equal(C.formatDuration(0, 'decimal'), '0.00h');
+  assert.equal(C.formatDuration(undefined), '0h');
+  // The entry dialog prefills from this, so it has to stay parseable.
+  assert.equal(C.toDurationInput(6000), '1m');
+  assert.ok(C.parseDuration(C.toDurationInput(6000)) > 0);
+  assert.equal(C.toDurationInput(0), '0h');
+});
+
+test('dark or light comes from the variable the app injects, not cfg.theme', () => {
+  assert.equal(C.isDarkTheme('1', 'light'), true, '19.3.1 reports light in dark mode');
+  assert.equal(C.isDarkTheme(' 1 ', 'light'), true);
+  assert.equal(C.isDarkTheme('0', 'dark'), false);
+  assert.equal(C.isDarkTheme('', 'light'), false, 'without the variable, cfg decides');
+  assert.equal(C.isDarkTheme('', 'dark'), true);
+  assert.equal(C.isDarkTheme('', undefined), true);
+  assert.equal(C.isDarkTheme(undefined, undefined), true);
+});
+
 // ---------- settings ----------
 
 test('coerceSettings keeps valid values and replaces invalid ones', () => {

@@ -376,6 +376,8 @@ button { cursor: pointer; }
 
 /* With a donut, the list is its legend: no bars, a divider between rows. */
 .ts-bd-body.has-donut { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 48px; align-items: center; }
+/* Beside a fully expanded list, the donut stays in view while scrolling. */
+.ts-bd-body.is-long .ts-bd-donut { align-self: start; position: sticky; top: 16px; }
 .ts-breakdown.has-donut { gap: 0; }
 .ts-breakdown.has-donut .ts-bd-row { padding: 9px 0; }
 .ts-breakdown.has-donut .ts-bd-row + .ts-bd-row { border-top: 1px solid var(--ts-divider); }
