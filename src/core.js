@@ -102,8 +102,9 @@ const TimesheetCore = (() => {
   // Compact form for prefilling the duration field: "2h35m" / "1h" / "34m".
   const toDurationInput = (ms) => (ms > 0 && ms < MINUTE_MS / 2 ? '1m' : formatDuration(ms).replace(' ', ''));
 
-  // The app injects --is-dark-theme with its theme variables. cfg.theme can't
-  // be trusted (19.3.1 reports 'light' in dark mode), so it's only the fallback.
+  // The app injects --is-dark-theme with its theme variables. cfg.theme is only
+  // the fallback: it follows the setting, so it's 'light' when the app is set
+  // to the system theme and that theme is dark.
   const isDarkTheme = (themeVar, cfgTheme) => {
     const value = String(themeVar ?? '').trim();
     return value ? value !== '0' : cfgTheme !== 'light';

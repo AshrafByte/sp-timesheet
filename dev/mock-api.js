@@ -158,7 +158,7 @@
   let archivedFails = false;
 
   const api = {
-    // Like the app: cfg.theme says light whatever the theme is.
+    // Like the app when it follows a dark system theme: cfg.theme stays light.
     cfg: { theme: 'light', appVersion: '18.0.0-dev', platform: 'web' },
     Hooks,
     getTasks: () => { stats.getTasks++; return later(active); },

@@ -6,7 +6,7 @@
 - The Insights breakdown shows projects and tasks as a donut, with the total in the middle and the list beside it as its legend. Hovering a slice or a row lights up the other, and the middle shows that item's time and share; on a touchscreen, tap a slice. The five largest items get their own slice and the rest share an "Other" slice, listed under their own heading. Items that share a color, such as one project's tasks, get lighter tints of it so they can be told apart. Tags keep the bars, since a task with several tags counts toward each.
 
 ### Fixed
-- In Super Productivity's dark theme, charts used the colors meant for the light theme, and native controls such as the date picker were drawn for a light background. The app reports its theme in two places and only one is reliable; Timesheet now reads that one.
+- With Super Productivity following a dark system theme, charts used the colors meant for the light theme, and native controls such as the date picker were drawn for a light background. Timesheet now reads the theme the app actually applied.
 - A few seconds of tracked time showed as `0h`, as if nothing was tracked. It now shows `<1m`.
 - Pressing export before the view had loaded saved an empty CSV.
 

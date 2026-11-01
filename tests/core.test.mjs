@@ -78,7 +78,7 @@ test('seconds of tracked time do not read as nothing', () => {
 });
 
 test('dark or light comes from the variable the app injects, not cfg.theme', () => {
-  assert.equal(C.isDarkTheme('1', 'light'), true, '19.3.1 reports light in dark mode');
+  assert.equal(C.isDarkTheme('1', 'light'), true, 'cfg.theme is light when following a dark system theme');
   assert.equal(C.isDarkTheme(' 1 ', 'light'), true);
   assert.equal(C.isDarkTheme('0', 'dark'), false);
   assert.equal(C.isDarkTheme('', 'light'), false, 'without the variable, cfg decides');
