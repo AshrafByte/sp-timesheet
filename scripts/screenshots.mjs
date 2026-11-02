@@ -17,8 +17,8 @@ const out = join(root, 'docs', 'images');
 const PORT = 5199;
 
 const SHOTS = {
-  'insights-dark': { size: [1280, 1290], query: 'shot=insights' },
-  'insights-light': { size: [1280, 1290], query: 'shot=insights&theme=light' },
+  'insights-dark': { size: [1280, 1330], query: 'shot=insights' },
+  'insights-light': { size: [1280, 1330], query: 'shot=insights&theme=light' },
   'timesheet-dark': { size: [1280, 1180], query: 'shot=timesheet' },
   'day-selected-light': { size: [1280, 1200], query: 'shot=insights-day&theme=light' },
   // Narrower, so the popover and dialogs stay readable in the README grid.

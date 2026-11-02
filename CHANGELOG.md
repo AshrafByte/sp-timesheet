@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.0
+
+### Changed
+- A new look that matches Super Productivity's task widget: softer cards with thin inset edges, tinted round buttons and pills in place of bordered ones, sentence-case labels instead of capitals, and a smaller set of text sizes and weights. Every color comes from the app's theme. The layout is unchanged.
+
+### Added
+- The comparison with the previous week is green when up and red when down, next to its arrow.
+
+### Fixed
+- Going from one week to another with identical contents, such as two empty weeks, left the old dates on the day cards.
+- The chart tooltip no longer covers the column it describes when it's too tall to fit above it.
+- Week arrows, the add button on each day and the collapse arrows are drawn as sharp, centered icons.
+- Dropdowns line up with the text fields in the dialogs, and small alignment and spacing fixes in the tooltip, subtask rows and settings.
+
 ## 2.1.0
 
 ### Added

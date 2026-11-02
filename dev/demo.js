@@ -3,7 +3,7 @@
  * scripted view states for capturing them. dist/dev.html loads this before
  * mock-api.js, which uses it when the URL has ?demo=busy.
  *   ?demo=busy        twelve weeks of work across nine projects
- *   ?shot=<state>     timesheet | insights (last week) | insights-day | filter | settings | entry
+ *   ?shot=<state>     timesheet | insights | insights-day | filter | settings | entry
  * Once a shot is set up, <html data-shot="ready"> is set.
  */
 const TimesheetDemo = (() => {
@@ -129,11 +129,9 @@ const TimesheetDemo = (() => {
     }
 
     // Kept only by Timesheet: manual entries and a task deleted in the app.
-    const lastThursday = (() => {
-      const d = new Date();
-      const back = ((d.getDay() - 4 + 7) % 7) || 7;
-      return -back;
-    })();
+    // Last week, the week the screenshots show.
+    const monday = -((new Date().getDay() + 6) % 7) - 7;
+    const thursday = monday + 3;
     const entry = (title, projectId, byDate, extra) => {
       const project = projects.find((p) => p.id === projectId);
       return {
@@ -149,10 +147,9 @@ const TimesheetDemo = (() => {
         ...extra,
       };
     };
-    const monday = -(((new Date().getDay() + 6) % 7));
     const stored = {
-      'manual-workshop': entry('Client workshop (on-site)', 'p-northwind', { [dayStr(lastThursday)]: 3 * H }, { isManual: true }),
-      'manual-travel': entry('Travel to client office', null, { [dayStr(lastThursday)]: 90 * M }, { isManual: true }),
+      'manual-workshop': entry('Client workshop (on-site)', 'p-northwind', { [dayStr(thursday)]: 3 * H }, { isManual: true }),
+      'manual-travel': entry('Travel to client office', null, { [dayStr(thursday)]: 90 * M }, { isManual: true }),
       'manual-call': entry('Phone call with Northwind PM', 'p-northwind', { [dayStr(monday)]: 25 * M }, { isManual: true }),
       'legacy-export': entry('Legacy CSV export script', 'p-api', { [dayStr(monday + 1)]: 105 * M }, { isDeleted: true }),
     };
@@ -190,14 +187,14 @@ const TimesheetDemo = (() => {
   const runShot = async (name) => {
     await waitFor(() => document.querySelector('.ts-day') && document.getElementById('statusLine').textContent === '');
     await delay(300);
+    // Last week: a whole week of data, whatever day it is.
+    click(document.getElementById('prevWeek'));
     switch (name) {
       case 'timesheet':
         showView('sheet');
         break;
       case 'insights':
-        // Last week: a whole week of columns rather than the days so far.
         showView('chart');
-        click(document.getElementById('prevWeek'));
         break;
       case 'insights-day': {
         showView('chart');

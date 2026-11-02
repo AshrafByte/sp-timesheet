@@ -238,10 +238,13 @@
       const { doc } = await open({
         projects: [project('a', 'A'), project('b', 'B'), project('c', 'C')],
         active: [
-          task('m1', 'Mon A', 'a', { [d(0)]: 2 * H }), task('m2', 'Mon B', 'b', { [d(0)]: H }),
-          task('t1', 'Tue C', 'c', { [d(1)]: H }),
+          task('m1', 'Mon A', 'a', { [d(-7)]: 2 * H }), task('m2', 'Mon B', 'b', { [d(-7)]: H }),
+          task('t1', 'Tue C', 'c', { [d(-6)]: H }),
         ],
       });
+      // Last week, because future days can't be selected.
+      click(doc, '#prevWeek');
+      await sleep(60);
       const hits = () => [...doc.querySelectorAll('#weekChart .ts-hit')];
       click(doc, hits()[1]);
       await sleep(60);
@@ -374,6 +377,40 @@
       const c2 = doc.defaultView.getComputedStyle(slice(doc, 0)).stroke;
       eq('dark: dark palette', [doc.documentElement.classList.contains('ts-dark'), c2], [true, 'rgb(57, 135, 229)']);
       eq('dark: color-scheme', doc.documentElement.style.colorScheme, 'dark');
+    },
+    async 'the cards follow the week on screen'() {
+      const { doc } = await open(perProject(3));
+      click(doc, '[data-view="sheet"]');
+      await sleep(40);
+      const dated = () => [doc.getElementById('rangeLabel').textContent.split(' – ')[0], doc.querySelector('.ts-day-toggle').textContent];
+      for (let i = 0; i < 3; i++) {
+        click(doc, '#prevWeek');
+        await sleep(40);
+        const [start, heading] = dated();
+        ok(`empty week ${i + 1}: cards show its dates`, heading.endsWith(start), [start, heading]);
+      }
+    },
+    async 'week comparison is colored by direction'() {
+      const twoWeeks = (now, before) => ({
+        projects: [project('p', 'P')],
+        active: [task('a', 'Task', 'p', { [d(0)]: now, ...(before ? { [d(-7)]: before } : {}) })],
+      });
+      const stat = (doc) => {
+        const all = [...doc.querySelectorAll('.ts-goal-stat')];
+        const el = all[all.length - 1];
+        return { text: el.firstChild.textContent, cls: el.firstChild.className, color: doc.defaultView.getComputedStyle(el.firstChild).color };
+      };
+      let s = stat((await open(twoWeeks(2 * H, H))).doc);
+      eq('more than last week: up', [s.text, s.cls], ['↑ 100%', 'ts-goal-stat-value is-up']);
+      const up = s.color;
+      s = stat((await open(twoWeeks(H, 2 * H))).doc);
+      eq('less than last week: down', [s.text, s.cls], ['↓ 50%', 'ts-goal-stat-value is-down']);
+      const down = s.color;
+      ok('up and down differ', up !== down, [up, down]);
+      s = stat((await open(twoWeeks(H, H))).doc);
+      eq('same: no color', [s.text, s.cls], ['Same', 'ts-goal-stat-value']);
+      s = stat((await open(twoWeeks(H, 0))).doc);
+      eq('nothing before: no color', [s.text, s.cls], ['–', 'ts-goal-stat-value']);
     },
     async 'seconds of tracked time'() {
       const { doc } = await open({

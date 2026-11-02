@@ -23,7 +23,7 @@ A weekly timesheet and charts for the time you track in [Super Productivity](htt
 **Insights**
 
 - The week as one stacked column per day, colored by project, with a daily-average line and a mark at each day's target.
-- Progress toward the weekly target, with a pace marker that shows where you would be if every day so far had met its target. Alongside it: average per active day, time left to target, days on target, and the change against the previous week.
+- Progress toward the weekly target, with a pace marker that shows where you would be if every day so far had met its target. Alongside it: average per active day, time left to target, days on target, and the change against the previous week, in green when up and red when down.
 - A breakdown of the week, or of one selected day, by project, tag or task. Projects and tasks are shown as a donut with the list as its legend; hover a slice or a row to see its time and share.
 - Weekly totals for the last 12 weeks against the weekly target.
 

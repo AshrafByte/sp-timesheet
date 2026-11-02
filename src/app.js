@@ -487,7 +487,7 @@
     },
     h('div', { class: 'ts-day-head' },
       h('button', { type: 'button', class: 'ts-day-toggle', 'aria-expanded': String(!collapsed), dataset: { toggleDate: dateStr } },
-        h('span', { class: 'ts-chevron', 'aria-hidden': 'true', text: '▾' }),
+        h('span', { class: 'ts-chevron', 'aria-hidden': 'true' }),
         heading,
         isToday && h('span', { class: 'ts-pill', text: 'Today' })),
       h('div', { class: 'ts-day-right' },
@@ -497,7 +497,6 @@
           title: 'Add an entry for this day',
           'aria-label': `Add an entry for ${heading}`,
           dataset: { addDate: dateStr },
-          text: '+',
         }),
         h('div', { class: 'ts-day-hours' }, fmt(total), ' ', h('span', { class: 'ts-day-target', text: `/ ${fmt(target * C.HOUR_MS)}` })))),
     h('div', {
@@ -565,7 +564,7 @@
       const rows = C.rowsForDay(state.log, dateStr, state.filter);
       return { day, dateStr, rows, total: C.sumCounted(rows) };
     });
-    const key = JSON.stringify([state.settings, state.filter, [...state.collapsed], todayStr(), filterSignature,
+    const key = JSON.stringify([+state.weekStart, state.settings, state.filter, [...state.collapsed], todayStr(), filterSignature,
       days.map((d) => d.rows.map((r) => [r.id, min(r.counted), r.entry.title, r.entry.projectTitle, r.entry.projectColor,
         r.entry.isManual, r.entry.isDeleted, tagTitles(r.entry), r.children.map((c) => [c.id, min(c.ms), c.entry.title])]))]);
     if (key === sheetKey) return;
@@ -623,8 +622,12 @@
     tip.hidden = false;
     const wrapWidth = tip.parentElement.clientWidth;
     const half = tip.offsetWidth / 2;
-    tip.style.left = `${Math.min(Math.max(anchor.x, half + 4), wrapWidth - half - 4)}px`;
-    tip.style.top = `${Math.max(anchor.y, tip.offsetHeight + 12)}px`;
+    const above = tip.offsetHeight + 12;
+    // Too tall to fit above the column: sit beside it instead of covering it.
+    const beside = anchor.y < above ? half + 24 : 0;
+    const x = anchor.x + (anchor.x + beside + half + 4 <= wrapWidth ? beside : -beside);
+    tip.style.left = `${Math.min(Math.max(x, half + 4), wrapWidth - half - 4)}px`;
+    tip.style.top = `${Math.max(anchor.y, above)}px`;
   };
 
   const focusedHit = (host) => [...host.querySelectorAll('.ts-hit')].indexOf(document.activeElement);
@@ -681,14 +684,15 @@
         const period = cmp.days < 7 ? 'vs same days last week' : 'vs the week before';
         if (cmp.previous > 0) {
           const change = Math.round(((cmp.current - cmp.previous) / cmp.previous) * 100);
-          stats.push([change === 0 ? 'Same' : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%`, period]);
+          const tone = change > 0 ? 'is-up' : change < 0 ? 'is-down' : '';
+          stats.push([change === 0 ? 'Same' : `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%`, period, tone]);
         } else {
           stats.push(['–', 'Nothing tracked the week before']);
         }
       }
     }
-    $('goalStats').replaceChildren(...stats.map(([value, label]) => h('div', { class: 'ts-goal-stat' },
-      h('div', { class: 'ts-goal-stat-value', text: value }),
+    $('goalStats').replaceChildren(...stats.map(([value, label, tone]) => h('div', { class: 'ts-goal-stat' },
+      h('div', { class: `ts-goal-stat-value ${tone || ''}`.trim(), text: value }),
       h('div', { class: 'ts-goal-stat-label', text: label }))));
     $('goalStats').hidden = !stats.length;
   };
